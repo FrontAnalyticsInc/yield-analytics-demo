@@ -1,0 +1,37 @@
+table Date
+	dataCategory: Time
+
+	column Date
+		dataType: dateTime
+		isKey
+		formatString: yyyy-mm-dd
+		summarizeBy: none
+		sourceColumn: [Date]
+
+	column Month
+		dataType: string
+		summarizeBy: none
+		sourceColumn: [Month]
+		sortByColumn: MonthStart
+
+	column MonthStart
+		dataType: dateTime
+		formatString: yyyy-mm-dd
+		summarizeBy: none
+		sourceColumn: [MonthStart]
+
+	column Week
+		dataType: dateTime
+		formatString: yyyy-mm-dd
+		summarizeBy: none
+		sourceColumn: [Week]
+
+	partition Date = calculated
+		mode: import
+		source =
+				ADDCOLUMNS(
+				    CALENDAR(DATE(2025, 9, 1), TODAY() + 31),
+				    "Month", FORMAT([Date], "yyyy-mm"),
+				    "MonthStart", DATE(YEAR([Date]), MONTH([Date]), 1),
+				    "Week", [Date] - WEEKDAY([Date], 3)
+				)

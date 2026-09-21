@@ -1,0 +1,93 @@
+table fact_unit
+
+	measure 'Units Completed' = CALCULATE(COUNTROWS(fact_unit), fact_unit[status] <> "wip", USERELATIONSHIP(fact_unit[completion_date], 'Date'[Date]))
+		formatString: #,0
+
+	measure 'Units Shipped' = CALCULATE(COUNTROWS(fact_unit), fact_unit[status] = "shipped", USERELATIONSHIP(fact_unit[completion_date], 'Date'[Date]))
+		formatString: #,0
+
+	measure 'Units Scrapped' = CALCULATE(COUNTROWS(fact_unit), fact_unit[status] = "scrapped", USERELATIONSHIP(fact_unit[completion_date], 'Date'[Date]))
+		formatString: #,0
+
+	measure 'First Pass Units' = CALCULATE(COUNTROWS(fact_unit), fact_unit[status] <> "wip", fact_unit[first_pass] = TRUE(), USERELATIONSHIP(fact_unit[completion_date], 'Date'[Date]))
+		formatString: #,0
+
+	measure WIP = CALCULATE(COUNTROWS(fact_unit), fact_unit[status] = "wip", REMOVEFILTERS('Date'))
+		formatString: #,0
+
+	measure 'First Pass Yield' = DIVIDE([First Pass Units], [Units Completed])
+		formatString: 0.0%
+
+	measure 'Final Yield' = DIVIDE([Units Shipped], [Units Completed])
+		formatString: 0.0%
+
+	measure 'Avg Cycle Days' = CALCULATE(AVERAGE(fact_unit[cycle_days]), fact_unit[status] <> "wip", USERELATIONSHIP(fact_unit[completion_date], 'Date'[Date]))
+		formatString: 0.0
+
+	column serial
+		dataType: string
+		summarizeBy: none
+		sourceColumn: serial
+
+	column lot_id
+		dataType: string
+		summarizeBy: none
+		sourceColumn: lot_id
+
+	column model
+		dataType: string
+		summarizeBy: none
+		sourceColumn: model
+
+	column started_at
+		dataType: dateTime
+		summarizeBy: none
+		sourceColumn: started_at
+		formatString: yyyy-mm-dd
+
+	column completed_at
+		dataType: dateTime
+		summarizeBy: none
+		sourceColumn: completed_at
+		formatString: yyyy-mm-dd
+
+	column status
+		dataType: string
+		summarizeBy: none
+		sourceColumn: status
+
+	column first_pass
+		dataType: boolean
+		summarizeBy: none
+		sourceColumn: first_pass
+
+	column start_date
+		dataType: dateTime
+		summarizeBy: none
+		sourceColumn: start_date
+		formatString: yyyy-mm-dd
+
+	column completion_date
+		dataType: dateTime
+		summarizeBy: none
+		sourceColumn: completion_date
+		formatString: yyyy-mm-dd
+
+	column cycle_days
+		dataType: double
+		summarizeBy: none
+		sourceColumn: cycle_days
+
+	column unit_url
+		dataType: string
+		summarizeBy: none
+		sourceColumn: unit_url
+		dataCategory: WebUrl
+
+	partition fact_unit = m
+		mode: import
+		source =
+				let
+				    Source = #"Load Parquet"("fact_unit")
+				in
+				    Source

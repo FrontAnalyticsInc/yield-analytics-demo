@@ -1,0 +1,35 @@
+name: ci
+on:
+  push: { branches: [main] }
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Simulator smoke test (no database)
+        working-directory: sim
+        run: |
+          pip install -q -r requirements.txt
+          python - <<'PY'
+          import random, tempfile, os
+          from datetime import datetime
+          import simulate, images
+          units = [simulate.plan_unit(i) for i in range(300)]
+          assert all(len(ev) >= 1 for _, ev in units)
+          fpy = sum(u["first_pass"] for u, _ in units) / len(units)
+          assert 0.5 < fpy < 0.95, fpy
+          with tempfile.TemporaryDirectory() as d:
+              assert images.render(42, "TISSUE_TEAR", random.Random(1), os.path.join(d, "x.png"))
+          print("ok, fpy", round(fpy, 3))
+          PY
+      - name: Power BI model is up to date
+        run: python3 powerbi/generate_model.py && git diff --exit-code powerbi/
+      - name: Build images
+        run: |
+          docker build -f sim/Dockerfile -t yield-sim .
+          docker build -f api/Dockerfile -t yield-api .
+          docker build -f exporter/Dockerfile -t yield-exporter .

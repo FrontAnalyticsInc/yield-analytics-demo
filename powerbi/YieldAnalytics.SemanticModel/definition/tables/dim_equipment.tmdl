@@ -1,0 +1,24 @@
+table dim_equipment
+
+	column equipment_id
+		dataType: string
+		summarizeBy: none
+		sourceColumn: equipment_id
+
+	column step_id
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: step_id
+
+	column name
+		dataType: string
+		summarizeBy: none
+		sourceColumn: name
+
+	partition dim_equipment = m
+		mode: import
+		source =
+				let
+				    Source = #"Load Parquet"("dim_equipment")
+				in
+				    Source

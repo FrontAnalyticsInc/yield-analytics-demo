@@ -1,0 +1,62 @@
+{
+  "config": "{\"version\": \"5.59\", \"themeCollection\": {\"baseTheme\": {\"name\": \"CY24SU10\", \"version\": \"5.59\", \"type\": 2}}, \"activeSectionIndex\": 0, \"settings\": {\"useNewFilterPaneExperience\": true, \"allowChangeFilterTypes\": true}}",
+  "layoutOptimization": 0,
+  "resourcePackages": [],
+  "sections": [
+    {
+      "config": "{}",
+      "displayName": "Overview",
+      "displayOption": 1,
+      "filters": "[]",
+      "height": 720,
+      "name": "page0",
+      "ordinal": 0,
+      "visualContainers": [],
+      "width": 1280
+    },
+    {
+      "config": "{}",
+      "displayName": "Step Yield",
+      "displayOption": 1,
+      "filters": "[]",
+      "height": 720,
+      "name": "page1",
+      "ordinal": 1,
+      "visualContainers": [],
+      "width": 1280
+    },
+    {
+      "config": "{}",
+      "displayName": "Root Cause",
+      "displayOption": 1,
+      "filters": "[]",
+      "height": 720,
+      "name": "page2",
+      "ordinal": 2,
+      "visualContainers": [],
+      "width": 1280
+    },
+    {
+      "config": "{}",
+      "displayName": "SPC",
+      "displayOption": 1,
+      "filters": "[]",
+      "height": 720,
+      "name": "page3",
+      "ordinal": 3,
+      "visualContainers": [],
+      "width": 1280
+    },
+    {
+      "config": "{}",
+      "displayName": "Image Inspections",
+      "displayOption": 1,
+      "filters": "[]",
+      "height": 720,
+      "name": "page4",
+      "ordinal": 4,
+      "visualContainers": [],
+      "width": 1280
+    }
+  ]
+}

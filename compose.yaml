@@ -1,0 +1,68 @@
+# Whole demo stack. Everything except Power BI runs here.
+#   docker compose up -d --build                     # local
+#   docker compose --profile tunnel up -d --build    # walden, public via Cloudflare Tunnel
+name: yield
+
+x-db-env: &db-env
+  DB_HOST: db
+  DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${DB_PASSWORD}
+      MSSQL_MEMORY_LIMIT_MB: "2048"
+    volumes: [dbdata:/var/opt/mssql]
+    ports: ["127.0.0.1:${DB_PORT:-14330}:1433"]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' -b -o /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+
+  sim:
+    build: { context: ., dockerfile: sim/Dockerfile }
+    environment:
+      <<: *db-env
+      SIM_INTERVAL_SECONDS: ${SIM_INTERVAL_SECONDS:-900}
+    volumes: [images:/data/images]
+    depends_on: { db: { condition: service_healthy } }
+    restart: unless-stopped
+
+  api:
+    build: { context: ., dockerfile: api/Dockerfile }
+    environment:
+      <<: *db-env
+      EXPORT_KEY: ${EXPORT_KEY:-}
+    volumes: [images:/data/images:ro, ./exports:/data/exports:ro]
+    ports: ["127.0.0.1:${API_PORT:-8000}:8000"]
+    depends_on: { db: { condition: service_healthy } }
+    restart: unless-stopped
+
+  exporter:
+    build: { context: ., dockerfile: exporter/Dockerfile }
+    environment:
+      <<: *db-env
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8000}
+      EXPORT_INTERVAL_SECONDS: ${EXPORT_INTERVAL_SECONDS:-3600}
+      AZURE_STORAGE_CONNECTION_STRING: ${AZURE_STORAGE_CONNECTION_STRING:-}
+      AZURE_STORAGE_CONTAINER: ${AZURE_STORAGE_CONTAINER:-yield}
+    volumes: [./exports:/data/exports]
+    depends_on: { sim: { condition: service_started } }
+    restart: unless-stopped
+
+  tunnel:
+    image: cloudflare/cloudflared:2025.8.1
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on: [api]
+    profiles: [tunnel]
+    restart: unless-stopped
+
+volumes:
+  dbdata:
+  images:

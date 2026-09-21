@@ -1,0 +1,13 @@
+expression BaseUrl = "https://yield.frontanalytics.com/exports" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+
+expression AccessKey = "set-me" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+
+/// Loads one exporter table. Web.Contents with a fixed base URL + RelativePath keeps the
+/// data source static, so Power BI Service can refresh it without a gateway.
+expression 'Load Parquet' =
+		(name as text) as table =>
+		let
+		    Bin = Web.Contents(BaseUrl, [RelativePath = name & ".parquet", Query = [key = AccessKey]]),
+		    Tbl = Parquet.Document(Bin)
+		in
+		    Tbl

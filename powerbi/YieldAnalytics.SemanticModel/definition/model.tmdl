@@ -1,0 +1,14 @@
+model Model
+	culture: en-US
+	defaultPowerBIDataSourceVersion: powerBI_V3
+	discourageImplicitMeasures
+
+ref table dim_step
+ref table dim_defect
+ref table dim_operator
+ref table dim_equipment
+ref table dim_lot
+ref table fact_unit
+ref table fact_step_event
+ref table fact_inspection
+ref table Date

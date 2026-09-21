@@ -1,0 +1,103 @@
+table fact_inspection
+
+	measure Images = COUNTROWS(fact_inspection)
+		formatString: #,0
+
+	measure 'AI Agreement' = DIVIDE(SUM(fact_inspection[ai_agrees]), [Images])
+		formatString: 0.0%
+
+	measure 'Defects Found by Inspector' = CALCULATE([Images], fact_inspection[true_class] <> "ok")
+		formatString: #,0
+
+	measure 'Defects Missed by AI' = CALCULATE([Images], fact_inspection[true_class] <> "ok", fact_inspection[ai_class] = "ok")
+		formatString: #,0
+
+	measure 'AI Recall' = 1 - DIVIDE([Defects Missed by AI], [Defects Found by Inspector])
+		formatString: 0.0%
+
+	column event_id
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: event_id
+
+	column serial
+		dataType: string
+		summarizeBy: none
+		sourceColumn: serial
+
+	column step_id
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: step_id
+
+	column attempt
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: attempt
+
+	column ended_at
+		dataType: dateTime
+		summarizeBy: none
+		sourceColumn: ended_at
+		formatString: yyyy-mm-dd
+
+	column event_date
+		dataType: dateTime
+		summarizeBy: none
+		sourceColumn: event_date
+		formatString: yyyy-mm-dd
+
+	column operator_id
+		dataType: string
+		summarizeBy: none
+		sourceColumn: operator_id
+
+	column equipment_id
+		dataType: string
+		summarizeBy: none
+		sourceColumn: equipment_id
+
+	column result
+		dataType: string
+		summarizeBy: none
+		sourceColumn: result
+
+	column true_class
+		dataType: string
+		summarizeBy: none
+		sourceColumn: true_class
+
+	column ai_class
+		dataType: string
+		summarizeBy: none
+		sourceColumn: ai_class
+
+	column ai_confidence
+		dataType: double
+		summarizeBy: none
+		sourceColumn: ai_confidence
+
+	column ai_agrees
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: ai_agrees
+
+	column image_url
+		dataType: string
+		summarizeBy: none
+		sourceColumn: image_url
+		dataCategory: ImageUrl
+
+	column unit_url
+		dataType: string
+		summarizeBy: none
+		sourceColumn: unit_url
+		dataCategory: WebUrl
+
+	partition fact_inspection = m
+		mode: import
+		source =
+				let
+				    Source = #"Load Parquet"("fact_inspection")
+				in
+				    Source

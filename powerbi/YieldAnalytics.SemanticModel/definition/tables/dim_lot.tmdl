@@ -1,0 +1,30 @@
+table dim_lot
+
+	column lot_id
+		dataType: string
+		summarizeBy: none
+		sourceColumn: lot_id
+
+	column tissue_lot
+		dataType: string
+		summarizeBy: none
+		sourceColumn: tissue_lot
+
+	column frame_lot
+		dataType: string
+		summarizeBy: none
+		sourceColumn: frame_lot
+
+	column released_at
+		dataType: dateTime
+		summarizeBy: none
+		sourceColumn: released_at
+		formatString: yyyy-mm-dd
+
+	partition dim_lot = m
+		mode: import
+		source =
+				let
+				    Source = #"Load Parquet"("dim_lot")
+				in
+				    Source

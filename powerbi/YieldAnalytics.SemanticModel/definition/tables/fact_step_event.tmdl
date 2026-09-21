@@ -1,0 +1,120 @@
+table fact_step_event
+
+	measure 'First Attempts' = SUM(fact_step_event[is_first_attempt])
+		formatString: #,0
+
+	measure 'First Attempt Fails' = SUM(fact_step_event[is_first_fail])
+		formatString: #,0
+
+	measure 'Step FPY' = IF([First Attempts] > 0, 1 - DIVIDE([First Attempt Fails], [First Attempts]))
+		formatString: 0.00%
+
+	measure 'First Attempt Fail Rate' = DIVIDE([First Attempt Fails], [First Attempts])
+		formatString: 0.00%
+
+	measure 'Rolled Throughput Yield' = PRODUCTX(FILTER(VALUES(dim_step[step_id]), [First Attempts] > 0), [Step FPY])
+		formatString: 0.0%
+
+	measure 'Rework Events' = CALCULATE(COUNTROWS(fact_step_event), fact_step_event[result] = "rework")
+		formatString: #,0
+
+	measure 'Scrap Events' = CALCULATE(COUNTROWS(fact_step_event), fact_step_event[result] = "scrap")
+		formatString: #,0
+
+	measure 'Defect Events' = CALCULATE(COUNTROWS(fact_step_event), NOT ISBLANK(fact_step_event[defect_code]))
+		formatString: #,0
+
+	measure 'Measurement Mean' = CALCULATE(AVERAGE(fact_step_event[value]), fact_step_event[attempt] = 1)
+		formatString: 0.000
+
+	measure 'Measurement StdDev' = CALCULATE(STDEV.S(fact_step_event[value]), fact_step_event[attempt] = 1)
+		formatString: 0.0000
+
+	measure Cpk =
+				VAR mu = [Measurement Mean]
+				VAR sd = [Measurement StdDev]
+				VAR lsl = SELECTEDVALUE(dim_step[lsl])
+				VAR usl = SELECTEDVALUE(dim_step[usl])
+				RETURN IF(NOT ISBLANK(usl) && sd > 0, MIN(usl - mu, mu - lsl) / (3 * sd))
+		formatString: 0.00
+
+	column event_id
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: event_id
+
+	column serial
+		dataType: string
+		summarizeBy: none
+		sourceColumn: serial
+
+	column step_id
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: step_id
+
+	column attempt
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: attempt
+
+	column started_at
+		dataType: dateTime
+		summarizeBy: none
+		sourceColumn: started_at
+		formatString: yyyy-mm-dd
+
+	column ended_at
+		dataType: dateTime
+		summarizeBy: none
+		sourceColumn: ended_at
+		formatString: yyyy-mm-dd
+
+	column operator_id
+		dataType: string
+		summarizeBy: none
+		sourceColumn: operator_id
+
+	column equipment_id
+		dataType: string
+		summarizeBy: none
+		sourceColumn: equipment_id
+
+	column result
+		dataType: string
+		summarizeBy: none
+		sourceColumn: result
+
+	column defect_code
+		dataType: string
+		summarizeBy: none
+		sourceColumn: defect_code
+
+	column event_date
+		dataType: dateTime
+		summarizeBy: none
+		sourceColumn: event_date
+		formatString: yyyy-mm-dd
+
+	column value
+		dataType: double
+		summarizeBy: none
+		sourceColumn: value
+
+	column is_first_attempt
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: is_first_attempt
+
+	column is_first_fail
+		dataType: int64
+		summarizeBy: none
+		sourceColumn: is_first_fail
+
+	partition fact_step_event = m
+		mode: import
+		source =
+				let
+				    Source = #"Load Parquet"("fact_step_event")
+				in
+				    Source

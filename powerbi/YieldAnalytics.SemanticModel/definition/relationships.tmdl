@@ -1,0 +1,45 @@
+relationship r00_fact_step_event_step_id
+	fromColumn: fact_step_event.step_id
+	toColumn: dim_step.step_id
+
+relationship r01_fact_step_event_equipment_id
+	fromColumn: fact_step_event.equipment_id
+	toColumn: dim_equipment.equipment_id
+
+relationship r02_fact_step_event_operator_id
+	fromColumn: fact_step_event.operator_id
+	toColumn: dim_operator.operator_id
+
+relationship r03_fact_step_event_defect_code
+	fromColumn: fact_step_event.defect_code
+	toColumn: dim_defect.defect_code
+
+relationship r04_fact_step_event_serial
+	fromColumn: fact_step_event.serial
+	toColumn: fact_unit.serial
+
+relationship r05_fact_step_event_event_date
+	fromColumn: fact_step_event.event_date
+	toColumn: Date.Date
+
+relationship r06_fact_unit_lot_id
+	fromColumn: fact_unit.lot_id
+	toColumn: dim_lot.lot_id
+
+relationship r07_fact_unit_completion_date
+	fromColumn: fact_unit.completion_date
+	toColumn: Date.Date
+	isActive: false
+
+relationship r08_fact_inspection_step_id
+	fromColumn: fact_inspection.step_id
+	toColumn: dim_step.step_id
+
+relationship r09_fact_inspection_serial
+	fromColumn: fact_inspection.serial
+	toColumn: fact_unit.serial
+
+relationship r10_fact_inspection_event_date
+	fromColumn: fact_inspection.event_date
+	toColumn: Date.Date
+	isActive: false
