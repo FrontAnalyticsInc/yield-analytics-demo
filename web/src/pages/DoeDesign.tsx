@@ -29,6 +29,29 @@ function NumberInput({ value, onChange, step = "any", width = 90 }: { value: num
     onChange={(e) => { setText(e.target.value); const v = parseFloat(e.target.value); if (!Number.isNaN(v)) onChange(v); }} />;
 }
 
+/** Is the gap between this factor's low and high settings big enough to show up? */
+function ExpectedCheck({ f, sigma, effect, alpha, cornerN, unit }: { f: Factor; sigma: number; effect: number; alpha: number; cornerN: number; unit: string }) {
+  if (f.expected == null || !(sigma > 0)) return null;
+  const exp = Math.abs(f.expected);
+  const chance = detectionChance(sigma, exp, alpha, cornerN);
+  const ok = chance >= 0.8;
+  let advice = "";
+  if (!ok && exp > 0 && f.kind === "numeric") {
+    // assuming a straight-line response, widen the range around its middle
+    const half = ((f.high - f.low) / 2) * (effect / exp);
+    const mid = (f.low + f.high) / 2;
+    advice = ` To expect a ${+effect.toPrecision(3)} ${unit} change, try about ${+(mid - half).toPrecision(4)} – ${+(mid + half).toPrecision(4)} ${f.units} if that's safe to run, or add repeats.`;
+  } else if (!ok) {
+    advice = " Add repeats, or pick two values that differ more.";
+  }
+  return (
+    <span className="hint" style={{ maxWidth: 360 }}>
+      <span className={`pill ${ok ? "pass" : chance >= 0.5 ? "rework" : "scrap"}`}>{ok ? "✓" : "!"} {pct(chance, 0)} chance to see it</span>
+      {exp < effect && <> This gap is smaller than the {+effect.toPrecision(3)} {unit} you care about.</>}{advice}
+    </span>
+  );
+}
+
 export default function DoeDesign() {
   const nav = useNavigate();
   const meta = useApi<{ steps: Step[]; operators: Operator[] }>("/api/meta");
@@ -153,6 +176,13 @@ export default function DoeDesign() {
                     <label>Value 2<input type="text" value={f.highLabel} onChange={(e) => setF(i, { highLabel: e.target.value })} style={{ width: 130, minWidth: 0 }} /></label>
                   </div>
                 )}
+                <div className="factor-levels">
+                  <label title="Your best guess of how much the response moves between the low and high setting">Expected change, low → high ({u})
+                    <input type="number" step="any" placeholder="optional" value={f.expected ?? ""} style={{ width: 110, minWidth: 0 }}
+                      onChange={(e) => { const v = parseFloat(e.target.value); setF(i, { expected: Number.isNaN(v) ? null : v }); }} />
+                  </label>
+                  <ExpectedCheck f={f} sigma={sigma} effect={effectSize} alpha={alpha} cornerN={cornerN} unit={u} />
+                </div>
               </div>
             ))}
             {k < 3 && <button className="btn" onClick={() => setFactors([...factors, blankFactor()])}>+ Add {k === 1 ? "a second" : "a third"} factor</button>}

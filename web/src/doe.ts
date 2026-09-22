@@ -9,6 +9,7 @@
  */
 
 export type Factor = {
+  expected?: number | null;  // optional guess: how much the response changes from low to high
   name: string;
   kind: "numeric" | "categorical";
   units: string;

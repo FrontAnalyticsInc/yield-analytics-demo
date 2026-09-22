@@ -48,7 +48,23 @@ Frontend development: `cd web && npm install && npm run dev` (proxies `/api` to 
 - **Middle points:** set at the middle of the numeric factors only. There are 3 by default, fixed at the start, middle and end of the run order for curvature and drift checks, and split across values when a factor is categorical.
 - **Diagram:** the design is drawn as a line, square or cube (one panel per categorical value), with a randomised run sheet. Save it with a name, objective, operator and notes.
 
-Running (tagging units, confirming settings) and analysis come next.
+- **Expected change (optional, per factor):** your guess of how much the response moves between low and high. The calculator shows the chance of seeing *that* change and, for numeric factors, how wide the range would need to be to expect the change you care about.
+
+Each experiment then has three tabs:
+
+1. **Design:** summary, diagram, and a printable run sheet.
+2. **Run:**
+   - Tag an in-process unit to each run. A unit can only ever be in one experiment, and shipped units or units already past the response step are rejected.
+   - Confirm the settings *ran as planned*, or record what actually ran along with a reason.
+   - The result arrives from the line measurement automatically, or can be entered by hand.
+   - The diagram shows progress rings, with red markers where the actual setting differed from the plan.
+3. **Analyze:**
+   - A least-squares fit on the settings *actually run*, giving a plain-language verdict per factor: real effect, no meaningful effect (the 95% range sits inside ± the change that matters), or unclear.
+   - Charts of effect sizes with 95% ranges, main effects, and interactions.
+   - The best settings for the target, with predictions and spec risk at every corner.
+   - Checks for achieved power, deviations, outliers, and drift in the middle points.
+
+**Simulate results** fills any open runs with simulated units, a few realistic setting deviations and responses drawn from a hidden cause-and-effect model: some factors matter and some don't, sometimes with an interaction, curvature or drift. The Analyze tab can then *reveal the simulated truth* to show how close the analysis got. **Clear simulation** removes it again.
 
 A walkthrough is in [docs/demo-script.md](docs/demo-script.md).
 

@@ -149,3 +149,30 @@ GO
 IF COLUMNPROPERTY(OBJECT_ID('mfg.experiment_run'), 'x2', 'AllowsNull') = 0
     ALTER TABLE mfg.experiment_run ALTER COLUMN x2 SMALLINT NULL;
 GO
+
+-- Experiment execution: one row per run once a unit is tagged to it
+IF OBJECT_ID('mfg.experiment_unit') IS NULL
+CREATE TABLE mfg.experiment_unit (
+    experiment_id    INT          NOT NULL,
+    run_no           INT          NOT NULL,
+    serial           VARCHAR(24)  NOT NULL,
+    simulated        BIT          NOT NULL DEFAULT 0,
+    assigned_by      VARCHAR(8)   NOT NULL REFERENCES mfg.operator(operator_id),
+    assigned_at      DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME(),
+    confirmed_by     VARCHAR(8)   NULL REFERENCES mfg.operator(operator_id),
+    confirmed_at     DATETIME2(0) NULL,
+    as_planned       BIT          NULL,                  -- NULL until confirmed
+    actual_1 FLOAT NULL, actual_2 FLOAT NULL, actual_3 FLOAT NULL,   -- real units (numeric) or -1/+1 (categorical)
+    deviation_note   NVARCHAR(200) NULL,
+    response         FLOAT        NULL,                  -- manual / simulated; line value is looked up live
+    response_source  VARCHAR(10)  NULL,                  -- manual | simulated
+    PRIMARY KEY (experiment_id, run_no),
+    FOREIGN KEY (experiment_id, run_no) REFERENCES mfg.experiment_run(experiment_id, run_no)
+);
+GO
+-- a unit can only ever be in one experiment
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'uq_experiment_unit_serial')
+    CREATE UNIQUE INDEX uq_experiment_unit_serial ON mfg.experiment_unit(serial);
+IF COL_LENGTH('mfg.experiment', 'sim_truth') IS NULL
+    ALTER TABLE mfg.experiment ADD sim_truth NVARCHAR(MAX) NULL;   -- JSON: hidden effects used by "Simulate results"
+GO

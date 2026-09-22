@@ -6,7 +6,18 @@ import { Factor, Run, settingLabel } from "./doe";
  * With no numeric factors, the categorical factors become the axes.
  */
 
-type Point = { x: number[]; runs: Run[] };
+type Point = { key: string; x: number[]; runs: Run[] };
+
+/** Optional overlays: Run view (progress, deviations) and Analyze view (values). */
+export type Overlay = {
+  label?: (p: Point) => string;                 // replaces "×n"
+  fill?: (p: Point) => string | undefined;      // replaces the default point colour
+  ring?: (p: Point) => number;                  // 0..1 progress ring around the point
+  deviations?: { planned: number[]; actual: number[]; runNo: number }[];  // coded
+  selected?: string | null;
+  onSelect?: (key: string | null) => void;
+  tooltip?: (p: Point) => string;
+};
 const S = 150; // edge length
 
 function project(axes: number, v: number[]): [number, number] {
@@ -40,7 +51,7 @@ function Axis({ f, from, to, side }: { f: Factor; from: [number, number]; to: [n
   </g>);
 }
 
-function Panel({ factors, axisIdx, points, title }: { factors: Factor[]; axisIdx: number[]; points: Point[]; title?: string }) {
+function Panel({ factors, axisIdx, points, title, overlay, devs }: { factors: Factor[]; axisIdx: number[]; points: Point[]; title?: string; overlay?: Overlay; devs: Overlay["deviations"] }) {
   const n = axisIdx.length;
   const cornersList = Array.from({ length: 2 ** n }, (_, i) => axisIdx.map((_, j) => ((i >> j) & 1 ? 1 : -1)));
   const edges: [number[], number[]][] = [];
@@ -49,15 +60,16 @@ function Panel({ factors, axisIdx, points, title }: { factors: Factor[]; axisIdx
 
   // bounding box for the viewBox, with room for labels
   const xs = cornersList.map((c) => p(c)[0]), ys = cornersList.map((c) => p(c)[1]);
-  const pad = { l: n >= 2 ? 110 : 40, r: n === 3 ? 90 : 40, t: title ? 58 : 32, b: 56 };
+  const pad = { l: n >= 2 ? 110 : 40, r: n === 3 ? 90 : 70, t: title ? 58 : 32, b: 56 };
   const x0 = Math.min(...xs) - pad.l, y0 = Math.min(...ys) - pad.t;
   const w = Math.max(...xs) - Math.min(...xs) + pad.l + pad.r, h = Math.max(...ys) - Math.min(...ys) + pad.t + pad.b;
 
   const tip = (pt: Point) => {
     const s = factors.map((f, i) => `${f.name}: ${settingLabel(f, pt.x[i])}`).join("\n");
     const kind = pt.runs[0].pointType === "center" ? "Centre point" : "Corner";
-    return `${kind}\n${s}\nRuns: ${pt.runs.map((r) => r.runNo).join(", ")}`;
+    return `${kind}\n${s}\nRuns: ${pt.runs.map((r) => r.runNo).join(", ")}${overlay?.tooltip ? `\n${overlay.tooltip(pt)}` : ""}`;
   };
+  const clamp = (v: number) => Math.max(-1.35, Math.min(1.35, v));
 
   return (
     <svg viewBox={`${x0} ${y0} ${w} ${h}`} style={{ width: "100%", maxWidth: w * 1.15, height: "auto", display: "block" }} role="img"
@@ -71,18 +83,40 @@ function Panel({ factors, axisIdx, points, title }: { factors: Factor[]; axisIdx
       <Axis f={factors[axisIdx[0]]} from={p(axisIdx.map(() => -1))} to={p(axisIdx.map((_, j) => (j === 0 ? 1 : -1)))} side="below" />
       {n >= 2 && <Axis f={factors[axisIdx[1]]} from={p(axisIdx.map(() => -1))} to={p(axisIdx.map((_, j) => (j === 1 ? 1 : -1)))} side="left" />}
       {n === 3 && <Axis f={factors[axisIdx[2]]} from={p([1, -1, -1])} to={p([1, -1, 1])} side="depth" />}
+      {(devs ?? []).map((d) => {
+        const [px, py] = p(axisIdx.map((j) => d.planned[j]));
+        const [ax, ay] = p(axisIdx.map((j) => clamp(d.actual[j])));
+        return (
+          <g key={`d${d.runNo}`}>
+            <title>{`Run ${d.runNo} ran at a different setting than planned`}</title>
+            <line x1={px} y1={py} x2={ax} y2={ay} style={{ stroke: "var(--critical)", strokeWidth: 1.2, strokeDasharray: "3 2" }} />
+            <circle cx={ax} cy={ay} r={4.5} style={{ fill: "var(--surface)", stroke: "var(--critical)", strokeWidth: 1.8 }} />
+          </g>
+        );
+      })}
       {points.map((pt, i) => {
         const [x, y] = p(axisIdx.map((j) => pt.x[j]));
         const center = pt.runs[0].pointType === "center";
         const count = pt.runs.length;
+        const fill = overlay?.fill?.(pt) ?? (center ? "var(--series-2)" : "var(--accent)");
+        const ring = overlay?.ring?.(pt);
+        const sel = overlay?.selected === pt.key;
+        const r = 9, circ = 2 * Math.PI * (r + 4);
         return (
-          <g key={i} style={{ cursor: "default" }}>
+          <g key={i} style={{ cursor: overlay?.onSelect ? "pointer" : "default" }}
+            onClick={() => overlay?.onSelect?.(sel ? null : pt.key)}>
             <title>{tip(pt)}</title>
-            <circle cx={x} cy={y} r={16} style={{ fill: "transparent" }} />
+            <circle cx={x} cy={y} r={18} style={{ fill: "transparent" }} />
+            {sel && <circle cx={x} cy={y} r={17} style={{ fill: "none", stroke: "var(--ink)", strokeWidth: 1.5 }} />}
+            {ring != null && <>
+              <circle cx={x} cy={y} r={r + 4} style={{ fill: "none", stroke: "var(--grid)", strokeWidth: 3 }} />
+              <circle cx={x} cy={y} r={r + 4} style={{ fill: "none", stroke: "var(--good)", strokeWidth: 3 }}
+                strokeDasharray={`${circ * ring} ${circ}`} transform={`rotate(-90 ${x} ${y})`} />
+            </>}
             {center
-              ? <rect x={x - 7} y={y - 7} width={14} height={14} transform={`rotate(45 ${x} ${y})`} style={{ fill: "var(--series-2)", stroke: "var(--surface)", strokeWidth: 2 }} />
-              : <circle cx={x} cy={y} r={7.5} style={{ fill: "var(--accent)", stroke: "var(--surface)", strokeWidth: 2 }} />}
-            <text x={x + 11} y={y - 9} style={{ fill: "var(--ink)", fontSize: 12, fontWeight: 600 }}>×{count}</text>
+              ? <rect x={x - 7} y={y - 7} width={14} height={14} transform={`rotate(45 ${x} ${y})`} style={{ fill, stroke: "var(--surface)", strokeWidth: 2 }} />
+              : <circle cx={x} cy={y} r={7.5} style={{ fill, stroke: "var(--surface)", strokeWidth: 2 }} />}
+            <text x={x + 13} y={y - 11} style={{ fill: "var(--ink)", fontSize: 12, fontWeight: 600 }}>{overlay?.label ? overlay.label(pt) : `×${count}`}</text>
           </g>
         );
       })}
@@ -90,7 +124,9 @@ function Panel({ factors, axisIdx, points, title }: { factors: Factor[]; axisIdx
   );
 }
 
-export default function DesignDiagram({ factors, runs }: { factors: Factor[]; runs: Run[] }) {
+export const pointKey = (r: { pointType: string; x: number[] }) => `${r.pointType}:${r.x.join(",")}`;
+
+export default function DesignDiagram({ factors, runs, overlay }: { factors: Factor[]; runs: Run[]; overlay?: Overlay }) {
   const numIdx = factors.map((f, i) => (f.kind === "numeric" ? i : -1)).filter((i) => i >= 0);
   const catIdx = factors.map((f, i) => (f.kind === "categorical" ? i : -1)).filter((i) => i >= 0);
   const axisIdx = numIdx.length ? numIdx : catIdx;
@@ -100,7 +136,7 @@ export default function DesignDiagram({ factors, runs }: { factors: Factor[]; ru
   const byKey = new Map<string, Point>();
   for (const r of runs) {
     const key = `${r.pointType}:${r.x.join(",")}`;
-    if (!byKey.has(key)) byKey.set(key, { x: r.x, runs: [] });
+    if (!byKey.has(key)) byKey.set(key, { key, x: r.x, runs: [] });
     byKey.get(key)!.runs.push(r);
   }
   const points = [...byKey.values()];
@@ -111,7 +147,8 @@ export default function DesignDiagram({ factors, runs }: { factors: Factor[]; ru
       {combos.map((combo, ci) => (
         <Panel key={ci} factors={factors} axisIdx={axisIdx}
           title={panelIdx.length ? panelIdx.map((fi, j) => `${factors[fi].name}: ${settingLabel(factors[fi], combo[j])}`).join(" · ") : undefined}
-          points={points.filter((pt) => panelIdx.every((fi, j) => pt.x[fi] === combo[j]))} />
+          points={points.filter((pt) => panelIdx.every((fi, j) => pt.x[fi] === combo[j]))} overlay={overlay}
+          devs={overlay?.deviations?.filter((d) => panelIdx.every((fi, j) => d.planned[fi] === combo[j]))} />
       ))}
     </div>
   );
