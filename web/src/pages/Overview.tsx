@@ -20,6 +20,7 @@ export default function Overview() {
   const s = useApi<Summary>(`/api/summary${qs({ start: f.start, model: f.model, grain })}`);
   const steps = useApi<Step[]>(`/api/steps${p}`);
   const pareto = useApi<Pareto[]>(`/api/pareto${qs({ start: f.start })}`);
+  const drifter = (steps.data ?? []).find((s) => s.name === "Wireform diameter check");
   const worst = (steps.data ?? []).filter((r) => r.first_fail > 0).sort((a, b) => a.fpy - b.fpy).slice(0, 10)
     .map((r) => ({ ...r, loss: 1 - r.fpy, short: `${r.step_id}. ${r.name}` }));
   const d = s.data;
@@ -27,12 +28,12 @@ export default function Overview() {
   return (
     <>
       <h1>Manufacturing yield overview</h1>
-      <p className="sub">Surgical heart valve line · 52-step routing · first-pass and rolled throughput yield</p>
+      <p className="sub">Surgical heart valve line · 53-step routing · first-pass and rolled throughput yield</p>
       <div className="toolbar"><PeriodBar models={meta.data?.models} /></div>
 
       <div className="tiles">
         <div className="tile"><div className="k">First-pass yield</div><div className="v">{pct(d?.fpy)}</div><div className="d">units with no fail or rework</div></div>
-        <div className="tile"><div className="k">Rolled throughput yield</div><div className="v">{pct(d?.rty)}</div><div className="d">product of 52 step yields</div></div>
+        <div className="tile"><div className="k">Rolled throughput yield</div><div className="v">{pct(d?.rty)}</div><div className="d">product of 53 step yields</div></div>
         <div className="tile"><div className="k">Final yield</div><div className="v">{pct(d?.final_yield)}</div><div className="d">shipped ÷ completed</div></div>
         <div className="tile"><div className="k">Completed</div><div className="v">{num(d?.completed)}</div><div className="d">{num(d?.scrapped)} scrapped</div></div>
         <div className="tile"><div className="k">Work in process</div><div className="v">{num(d?.wip)}</div><div className="d">units on the line now</div></div>
@@ -116,7 +117,7 @@ export default function Overview() {
         <div className="card">
           <h2>What the data is saying</h2>
           <p className="hint">Built-in stories to find during the demo</p>
-          <p className="story"><Link to="/spc?step=15">Wireform diameter</Link>: station MS-15-2 drifted high mid-May → early July 2026.</p>
+          <p className="story"><Link to={`/spc?step=${drifter?.step_id ?? ""}`}>Wireform diameter</Link>: station MS-{String(drifter?.step_id ?? 0).padStart(2, "0")}-2 drifted high mid-May → early July 2026.</p>
           <p className="story"><Link to="/explore?dim=tissue_lot&area=Tissue">Tissue lot PT-2606-B</Link>: calcific spots well above other lots.</p>
           <p className="story"><Link to="/explore?dim=operator&area=Assembly">Operator OP-07</Link>: new-hire suture learning curve since March.</p>
           <p className="story"><Link to="/inspections?mismatch=1">Vision model</Link>: misses faint fibers the inspectors catch.</p>

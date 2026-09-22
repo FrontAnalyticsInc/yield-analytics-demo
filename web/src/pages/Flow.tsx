@@ -5,7 +5,7 @@ import { label, num, pct, qs, useApi, useColors } from "../lib";
 
 type Counts = Record<string, number>;
 type Step = {
-  step_id: number; name: string; area: string; step_type: "process" | "measurement" | "visual" | "gate";
+  step_id: number; name: string; area: string; step_type: "process" | "measurement" | "visual" | "gate" | "scan";
   param_unit: string | null; entered: number; fpy: number; first_fail: number;
   scrap: Counts; rework: Counts; caused_scrap: Counts; caused_rework: Counts;
   cpk: number | null; ai_agreement: number | null; images: number;
@@ -69,7 +69,7 @@ export default function Flow() {
     <>
       <h1>Process flow</h1>
       <p className="sub">
-        All {steps.length || 52} routing steps, top to bottom. The band is the units still in the process. Units that were scrapped leave to the right, and
+        All {steps.length || 53} routing steps, top to bottom. The band is the units still in the process. Units that were scrapped leave to the right, and
         rework loops back on the left. Most steps have no measurement, so a defect made there only shows up at a later check.
       </p>
       <div className="toolbar">
@@ -86,7 +86,7 @@ export default function Flow() {
         <div className="tile"><div className="k">Units finished</div><div className="v">{num(d?.units)}</div><div className="d">shipped or scrapped in the period</div></div>
         <div className="tile"><div className="k">Shipped</div><div className="v">{num(d?.shipped)}</div><div className="d">final yield {pct(d?.yield)}</div></div>
         <div className="tile"><div className="k">Rolled throughput yield</div><div className="v">{pct(d?.rty)}</div><div className="d">through every step first time</div></div>
-        <div className="tile"><div className="k">Checks</div><div className="v">{steps.filter(isGate).length} <span style={{ fontSize: 15, color: "var(--muted)" }}>of {steps.length || 52}</span></div><div className="d">steps that measure, image or gate the valve</div></div>
+        <div className="tile"><div className="k">Checks</div><div className="v">{steps.filter(isGate).length} <span style={{ fontSize: 15, color: "var(--muted)" }}>of {steps.length || 53}</span></div><div className="d">steps that measure, image or gate the valve</div></div>
       </div>
 
       <div className="card">
@@ -182,7 +182,7 @@ function Row({ s, left, top, open, view, units, onClick }: { s: Step; left: numb
       <button className="flowhead" onClick={onClick} aria-expanded={open} style={{ height: gate ? GATE : ROW }}>
         <span className="no">{s.step_id}</span>
         <span className="nm">{s.name}</span>
-        <span className="ty">{{ measurement: "measure", visual: "image", gate: "go / no-go", process: "" }[s.step_type]}</span>
+        <span className="ty">{{ measurement: "measure", visual: "image", scan: "scan", gate: "go / no-go", process: "" }[s.step_type]}</span>
         <span className="num">{num(s.entered)}</span>
         <span className={`num ${s.fpy < 0.97 ? "bad" : ""}`}>{gate || s.first_fail ? pct(s.fpy) : ""}</span>
         <span className="num rw">{rework ? `↻ ${rework}` : ""}</span>
@@ -208,7 +208,7 @@ function Detail({ s, view, units }: { s: Step; view: string; units: number }) {
         {caught.length ? caught.sort((a, b) => b.n - a.n).map((x) => (
           <div key={x.r + x.k} className="fd">
             <span className={`pill ${x.r}`}>{x.r === "scrap" ? "✕" : "↻"} {x.n}</span>
-            {s.step_type === "visual" && x.k !== "PROCESS_DEV"
+            {(s.step_type === "visual" || s.step_type === "scan") && x.k !== "PROCESS_DEV"
               ? <Link to={`/inspections${qs({ step: s.step_id, class: x.k })}`}>{label(x.k)} images →</Link>
               : <span>{label(x.k)}</span>}
           </div>
@@ -226,7 +226,7 @@ function Detail({ s, view, units }: { s: Step; view: string; units: number }) {
       <div className="fdlinks">
         <h3>Dig in</h3>
         {s.step_type === "measurement" && <Link to={`/spc?step=${s.step_id}`}>SPC chart and capability →</Link>}
-        {s.step_type === "visual" && <Link to={`/inspections?step=${s.step_id}`}>All inspection images ({num(s.images)}) →</Link>}
+        {(s.step_type === "visual" || s.step_type === "scan") && <Link to={`/inspections?step=${s.step_id}`}>All {s.step_type === "scan" ? "scans" : "inspection images"} ({num(s.images)}) →</Link>}
         <Link to={`/explore?step=${s.step_id}`}>Fail rate by operator, station and lot →</Link>
       </div>
     </div>

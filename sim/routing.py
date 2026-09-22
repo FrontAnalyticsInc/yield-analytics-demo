@@ -1,4 +1,4 @@
-"""The 52-step routing for a bovine-pericardium surgical heart valve.
+"""The 53-step routing for a bovine-pericardium surgical heart valve.
 
 Each step is (name, area, type, spec). Measurement specs are
 (param, unit, lsl, target, usl, process_sd). Visual steps capture an image.
@@ -6,7 +6,10 @@ Base fail rates are per attempt; the simulator layers drift and lot/operator
 effects on top.
 """
 
-P, M, V, G = "process", "measurement", "visual", "gate"   # G = go / no-go, pass or fail, nothing measured
+P, M, V, G, T = "process", "measurement", "visual", "gate", "scan"
+# V = one image, one disposition. T = transillumination scan: the leaflet is backlit and the
+# vision system boxes every inclusion it finds, so accept / reject is a count-and-size rule.
+# G = go / no-go, pass or fail, nothing measured.
 
 STEPS = [
     # Tissue preparation
@@ -20,6 +23,7 @@ STEPS = [
     ("Leaflet die cutting", "Leaflet", P, None),
     ("Leaflet width measurement", "Leaflet", M, ("leaflet_width", "mm", 21.8, 22.0, 22.2, 0.045)),
     ("Leaflet visual inspection", "Leaflet", V, None),
+    ("Leaflet transillumination scan", "Leaflet", T, None),
     ("Leaflet matching (triplet)", "Leaflet", P, None),
     ("Leaflet deflection test", "Leaflet", M, ("deflection", "mm", 3.2, 3.6, 4.0, 0.09)),
     # Frame / stent
@@ -67,16 +71,25 @@ STEPS = [
     ("Device history record review", "Final", P, None),
     ("Final QA release", "Final", P, None),
 ]
-assert len(STEPS) == 52
-assert [STEPS[i - 1][0] for i in (31, 39)] == ["Coaptation go / no-go", "Pressure integrity test"]
+assert len(STEPS) == 53
 
-# Go / no-go gates: step_id -> (fail rate on first attempt, fail rate on the retest, defect).
-# The pressure test is the dominant loss: 40% fail, and most of those cannot be recovered,
-# which is what makes rework look ineffective (60% pass first time, ~75% after rework).
-GATES = {
-    31: (0.07, 0.25, "COAPT_FAIL"),
-    39: (0.38, 0.58, "LEAK_FAIL"),
-}
+# Steps are looked up by name everywhere below, so inserting a step into the route
+# never silently repoints one of these tables at its neighbour.
+STEP_ID = {name: i for i, (name, *_) in enumerate(STEPS, 1)}
+assert len(STEP_ID) == len(STEPS), "step names must be unique"
+
+
+def ids(by_name: dict) -> dict:
+    return {STEP_ID[k]: v for k, v in by_name.items()}
+
+
+# Go / no-go gates: (fail rate on first attempt, fail rate on the retest, defect).
+# The pressure test is the dominant loss: 38% fail, and most of those cannot be recovered,
+# which is what makes rework look ineffective (~59% pass first time, ~75% after rework).
+GATES = ids({
+    "Coaptation go / no-go": (0.07, 0.25, "COAPT_FAIL"),
+    "Pressure integrity test": (0.38, 0.58, "LEAK_FAIL"),
+})
 
 DEFECTS = [
     # code, description, category
@@ -90,16 +103,23 @@ DEFECTS = [
     ("PROCESS_DEV", "Process deviation / documentation error", "process"),
     ("COAPT_FAIL", "Coaptation gap at go / no-go check", "functional"),
     ("LEAK_FAIL", "Leak beyond limit at pressure integrity test", "functional"),
+    ("INCLUSION_EXCESS", "Too many or too large inclusions in transillumination scan", "tissue"),
 ]
 
 # Which image defects each visual step can see.
-VISUAL_DEFECTS = {
-    1: ["TISSUE_TEAR", "CALCIFIC_SPOT", "FIBER_PARTICLE"],
-    10: ["TISSUE_TEAR", "CALCIFIC_SPOT", "FIBER_PARTICLE"],
-    25: ["SUTURE_GAP", "FIBER_PARTICLE"],
-    30: ["LEAFLET_MISALIGN", "SUTURE_GAP"],
-    44: ["TISSUE_TEAR", "FIBER_PARTICLE", "SUTURE_GAP", "LEAFLET_MISALIGN"],
-}
+VISUAL_DEFECTS = ids({
+    "Pericardium receiving inspection": ["TISSUE_TEAR", "CALCIFIC_SPOT", "FIBER_PARTICLE"],
+    "Leaflet visual inspection": ["TISSUE_TEAR", "CALCIFIC_SPOT", "FIBER_PARTICLE"],
+    "Suture line inspection": ["SUTURE_GAP", "FIBER_PARTICLE"],
+    "Coaptation visual check": ["LEAFLET_MISALIGN", "SUTURE_GAP"],
+    "Final visual inspection": ["TISSUE_TEAR", "FIBER_PARTICLE", "SUTURE_GAP", "LEAFLET_MISALIGN"],
+})
+
+# Transillumination scan: the vision system reports every inclusion it can see in the
+# backlit leaflet. A scan is rejected on the count/size rule below, not on one defect.
+SCAN_STEP = STEP_ID["Leaflet transillumination scan"]
+SCAN_CLASSES = ["INCLUSION", "PARTICLE", "THIN_SPOT", "FIBER"]
+SCAN_LIMITS = {"count": 18, "size_mm": 0.55}   # reject if either is exceeded
 
 # Defects that cannot be reworked -> unit scrapped.
 SCRAP_DEFECTS = {"TISSUE_TEAR", "CALCIFIC_SPOT"}
@@ -125,6 +145,6 @@ OPERATORS = [
 
 def equipment_for(step_id: int, step_type: str) -> list[tuple[str, str]]:
     """One or two stations per step (two where there's parallel capacity)."""
-    code = {"process": "PR", "measurement": "MS", "visual": "VI", "gate": "GO"}[step_type]
+    code = {"process": "PR", "measurement": "MS", "visual": "VI", "gate": "GO", "scan": "TS"}[step_type]
     n = 2 if step_type != "process" or step_id in (23, 24, 26) else 1   # two stations where there is parallel capacity
     return [(f"{code}-{step_id:02d}-{k}", f"{code} station {step_id:02d}{'AB'[k - 1]}") for k in range(1, n + 1)]

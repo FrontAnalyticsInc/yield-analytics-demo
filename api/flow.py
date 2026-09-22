@@ -17,34 +17,37 @@ from db import q
 
 router = APIRouter()
 
-# (defect_code, step that caught it) -> step most likely to have caused it
+# (defect_code, name of the step that caught it) -> name of the step that most likely caused it.
+# Keyed by name: inserting a step into the route must never silently repoint an entry.
 ORIGIN = {
-    ("TISSUE_TEAR", 1): 1,           # arrives torn: supplier / harvest
-    ("CALCIFIC_SPOT", 1): 1,
-    ("FIBER_PARTICLE", 1): 1,
-    ("TISSUE_TEAR", 10): 8,          # die cutting nicks the leaflet edge
-    ("CALCIFIC_SPOT", 10): 6,        # anti-calcification treatment not effective
-    ("FIBER_PARTICLE", 10): 8,
-    ("SUTURE_GAP", 25): 24,
-    ("FIBER_PARTICLE", 25): 23,
-    ("SUTURE_GAP", 30): 24,
-    ("LEAFLET_MISALIGN", 30): 22,    # leaflet-to-frame alignment
-    ("TISSUE_TEAR", 44): 24,         # needle damage during leaflet body suturing
-    ("SUTURE_GAP", 44): 24,
-    ("LEAFLET_MISALIGN", 44): 22,
-    ("FIBER_PARTICLE", 44): 28,      # trimming sheds fabric fibers
-    ("COAPT_FAIL", 31): 22,          # go / no-go: geometry set at leaflet-to-frame alignment
-    ("LEAK_FAIL", 39): 24,           # go / no-go: a leak path is a suture line problem
+    ("TISSUE_TEAR", "Pericardium receiving inspection"): "Pericardium receiving inspection",
+    ("CALCIFIC_SPOT", "Pericardium receiving inspection"): "Pericardium receiving inspection",
+    ("FIBER_PARTICLE", "Pericardium receiving inspection"): "Pericardium receiving inspection",
+    ("TISSUE_TEAR", "Leaflet visual inspection"): "Leaflet die cutting",
+    ("CALCIFIC_SPOT", "Leaflet visual inspection"): "Anti-calcification treatment",
+    ("FIBER_PARTICLE", "Leaflet visual inspection"): "Leaflet die cutting",
+    ("INCLUSION_EXCESS", "Leaflet transillumination scan"): "Tissue rinse & cleaning",
+    ("SUTURE_GAP", "Suture line inspection"): "Leaflet body suturing",
+    ("FIBER_PARTICLE", "Suture line inspection"): "Commissure suturing",
+    ("SUTURE_GAP", "Coaptation visual check"): "Leaflet body suturing",
+    ("LEAFLET_MISALIGN", "Coaptation visual check"): "Leaflet-to-frame alignment",
+    ("TISSUE_TEAR", "Final visual inspection"): "Leaflet body suturing",
+    ("SUTURE_GAP", "Final visual inspection"): "Leaflet body suturing",
+    ("LEAFLET_MISALIGN", "Final visual inspection"): "Leaflet-to-frame alignment",
+    ("FIBER_PARTICLE", "Final visual inspection"): "Trim excess fabric",
+    ("COAPT_FAIL", "Coaptation go / no-go"): "Leaflet-to-frame alignment",
+    ("LEAK_FAIL", "Pressure integrity test"): "Leaflet body suturing",
 }
 
 
-def origin(defect: str | None, step_id: int, process_steps: list[int]) -> int:
-    if (defect, step_id) in ORIGIN:
-        return ORIGIN[(defect, step_id)]
+def origin(defect: str | None, step: dict, steps: list[dict], process_steps: list[int]) -> int:
+    named = ORIGIN.get((defect, step["name"]))
+    if named:
+        return next(s["step_id"] for s in steps if s["name"] == named)
     if defect in ("OOS_LOW", "OOS_HIGH", "FIBER_PARTICLE"):
-        before = [s for s in process_steps if s < step_id]
-        return before[-1] if before else step_id
-    return step_id  # process deviations happen where they are recorded
+        before = [s for s in process_steps if s < step["step_id"]]
+        return before[-1] if before else step["step_id"]
+    return step["step_id"]  # process deviations happen where they are recorded
 
 
 @router.get("/api/flow")
@@ -80,7 +83,7 @@ def flow(start: date | None = None, end: date | None = None, model: str | None =
         st = by_step[e["step_id"]]
         st[e["result"]][e["defect_code"]] = st[e["result"]].get(e["defect_code"], 0) + e["n"]
         st["first_fail"] += e["first"]
-        o = by_step[origin(e["defect_code"], e["step_id"], process_steps)]
+        o = by_step[origin(e["defect_code"], st, steps, process_steps)]
         bucket = o["caused_" + e["result"]]
         key = f'{e["defect_code"]}@{e["step_id"]}'   # keep where it was caught, for the tooltip
         bucket[key] = bucket.get(key, 0) + e["n"]

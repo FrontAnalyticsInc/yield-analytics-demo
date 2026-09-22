@@ -26,7 +26,8 @@ from datetime import datetime, timedelta
 import pymssql
 
 import images
-from routing import DEFECTS, GATES, MODELS, OPERATORS, SCRAP_DEFECTS, STEPS, VISUAL_DEFECTS, equipment_for
+from routing import (DEFECTS, GATES, MODELS, OPERATORS, SCAN_CLASSES, SCAN_LIMITS, SCRAP_DEFECTS, STEP_ID,
+                     STEPS, VISUAL_DEFECTS, equipment_for)
 
 log = logging.getLogger("sim")
 SEED = int(os.environ.get("SIM_SEED", "2026"))
@@ -77,11 +78,11 @@ def seed_reference(cur):
 
 def drift(eq_id: str, t: datetime) -> float:
     """Mean shift (in process SDs) for a station at time t."""
-    if eq_id == "MS-15-2":
+    if eq_id == f'MS-{STEP_ID["Wireform diameter check"]:02d}-2':
         start, peak, fixed = datetime(2026, 5, 15), datetime(2026, 6, 25), datetime(2026, 7, 6)
         if start <= t < fixed:
             return 4.6 * min(1.0, (t - start) / (peak - start))
-    if eq_id == "MS-35-1":  # slow, harmless wander so charts aren't flat
+    if eq_id == f'MS-{STEP_ID["Effective orifice area"]:02d}-1':  # slow, harmless wander so charts aren't flat
         return 0.4 * math.sin((t - EPOCH).days / 45)
     return 0.0
 
@@ -125,7 +126,8 @@ def plan_unit(i: int):
             op = rng.choice(shift_ops)[0]
             eq = rng.choice(stations)[0]
             ev = dict(serial=unit["serial"], step_id=step_id, attempt=attempt, started_at=t, ended_at=t + dur,
-                      operator_id=op, equipment_id=eq, result="pass", defect_code=None, value=None, image=None)
+                      operator_id=op, equipment_id=eq, result="pass", defect_code=None, value=None, image=None,
+                      scan=None)
             t += dur
 
             if kind == "measurement":
@@ -144,7 +146,7 @@ def plan_unit(i: int):
                 if bad_tissue and "CALCIFIC_SPOT" in cands:
                     rate += 0.3
                     weights[cands.index("CALCIFIC_SPOT")] = 6
-                if step_id in (25, 30):
+                if step_id in (STEP_ID["Suture line inspection"], STEP_ID["Coaptation visual check"]):
                     rate *= operator_skill(op, t)
                 if attempt > 1:
                     rate *= 0.3
@@ -153,12 +155,18 @@ def plan_unit(i: int):
                 if defect:
                     ev["defect_code"] = defect
                     ev["result"] = "scrap" if defect in SCRAP_DEFECTS or attempt > 1 else "rework"
+            elif kind == "scan":
+                ev["scan"] = scan_meta(rng, bad_tissue, attempt)
+                if ev["scan"]["reject"]:
+                    ev["defect_code"] = "INCLUSION_EXCESS"
+                    # a reject goes back for re-clean and re-scan; a second reject is scrap
+                    ev["result"] = "rework" if attempt == 1 else "scrap"
             elif kind == "gate":
                 # go / no-go: pass or fail, nothing measured. A failed unit is reworked once;
                 # the retest fails far more often than the first test, so rework recovers little.
                 first, retest, defect = GATES[step_id]
                 rate = first if attempt == 1 else retest
-                if step_id == 31:
+                if step_id == STEP_ID["Coaptation go / no-go"]:
                     rate *= operator_skill(op, t)
                 if rng.random() < rate:
                     ev["defect_code"] = defect
@@ -181,6 +189,34 @@ def plan_unit(i: int):
             break
     unit["completed_at"] = events[-1]["ended_at"]
     return unit, events
+
+
+def scan_meta(rng, bad_tissue, attempt):
+    """Transillumination scan: every inclusion the vision system finds, plus the verdict.
+
+    The rule is count-and-size, so a scan can reject on many small hits or on one big one.
+    Re-cleaning removes most loose particulate, so a rescan usually comes back clean.
+    """
+    mu = 9.5 + (5.5 if bad_tissue else 0)
+    n = max(0, int(rng.gauss(mu * (0.45 if attempt > 1 else 1), 3.2)))
+    dets = []
+    for k in range(n):
+        cls = rng.choices(SCAN_CLASSES, [5, 4, 2, 2])[0]
+        size = round(math.exp(rng.gauss(math.log(0.2 if cls == "INCLUSION" else 0.15), 0.45)), 3)
+        w = min(0.16, max(0.035, size / 3))
+        # place the hit inside the lit leaflet, not on the dark table around it: the two
+        # uniforms become an angle and a radius on the ellipse the backlit cusp fills
+        ang, rad = 2 * math.pi * rng.random(), math.sqrt(rng.random())
+        x = 0.5 + 0.27 * rad * math.cos(ang) - w / 2
+        y = 0.50 + 0.17 * rad * math.sin(ang) - w / 2
+        dets.append(dict(idx=k + 1, cls=cls, size_mm=size, confidence=round(rng.uniform(0.55, 0.99), 3),
+                         bbox_x=round(x, 4), bbox_y=round(y, 4), bbox_w=round(w, 4), bbox_h=round(w, 4)))
+    biggest = max((d["size_mm"] for d in dets), default=0.0)
+    rule = n > SCAN_LIMITS["count"] or biggest > SCAN_LIMITS["size_mm"]
+    # the inspector reviews the boxes and occasionally overrides a borderline call
+    borderline = abs(n - SCAN_LIMITS["count"]) <= 2 or abs(biggest - SCAN_LIMITS["size_mm"]) < 0.04
+    reject = (not rule) if (borderline and rng.random() < 0.25) else rule
+    return dict(dets=dets, count=n, max_mm=biggest, reject=reject, rule=rule)
 
 
 def image_meta(rng, step_id, defect):
@@ -221,7 +257,7 @@ def sync(now: datetime):
     cur.execute("SELECT ISNULL(MAX(event_id),0) FROM mfg.step_event")
     next_id = cur.fetchone()[0] + 1
 
-    new_lots, new_units, new_events, meas, imgs, updates = [], [], [], [], [], []
+    new_lots, new_units, new_events, meas, imgs, dets, updates = [], [], [], [], [], [], []
     i = 0
     while EPOCH + START_INTERVAL * i <= now:
         unit, events = plan_unit(i)
@@ -248,6 +284,17 @@ def sync(now: datetime):
                                ev["operator_id"], ev["equipment_id"], ev["result"], ev["defect_code"]))
             if ev["value"] is not None:
                 meas.append((eid, ev["value"]))
+            if ev["scan"]:
+                sc = ev["scan"]
+                rel = f"{ev['serial']}/{ev['step_id']:02d}-{ev['attempt']}.png"
+                os.makedirs(os.path.join(IMAGE_DIR, ev["serial"]), exist_ok=True)
+                images.transillumination(random.Random(f"{SEED}-scan-{eid}"), sc["dets"], os.path.join(IMAGE_DIR, rel))
+                verdict = "INCLUSION_EXCESS" if sc["reject"] else "ok"
+                imgs.append((eid, rel, verdict, "INCLUSION_EXCESS" if sc["rule"] else "ok",
+                             round(min(0.99, 0.6 + abs(sc["count"] - SCAN_LIMITS["count"]) / 30), 3),
+                             *(None,) * 4))
+                dets += [(eid, d["idx"], d["cls"], d["size_mm"], d["confidence"],
+                          d["bbox_x"], d["bbox_y"], d["bbox_w"], d["bbox_h"]) for d in sc["dets"]]
             if ev["image"]:
                 im = ev["image"]
                 rel = f"{ev['serial']}/{ev['step_id']:02d}-{ev['attempt']}.png"
@@ -265,9 +312,12 @@ def sync(now: datetime):
     insert_rows(cur, "mfg.measurement", ["event_id", "value"], meas)
     insert_rows(cur, "mfg.inspection_image", ["event_id", "image_path", "true_class", "ai_class", "ai_confidence",
                                               "bbox_x", "bbox_y", "bbox_w", "bbox_h"], imgs, batch=200)
+    insert_rows(cur, "mfg.inspection_detection", ["event_id", "idx", "class", "size_mm", "confidence",
+                                                  "bbox_x", "bbox_y", "bbox_w", "bbox_h"], dets, batch=300)
     conn.close()
-    log.info("sync @ %s: +%d units, %d completed, +%d events, +%d images",
-             now.isoformat(timespec="minutes"), len(new_units), len(updates), len(new_events), len(imgs))
+    log.info("sync @ %s: +%d units, %d completed, +%d events, +%d images, +%d detections",
+             now.isoformat(timespec="minutes"), len(new_units), len(updates), len(new_events),
+             len(imgs), len(dets))
 
 
 def main():

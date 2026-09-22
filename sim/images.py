@@ -1,7 +1,9 @@
 """Synthetic inspection images with labelled defects.
 
-Three views: a flat pericardium patch (step 1), a single cut leaflet (step 10)
-and the assembled valve seen from the outflow side (steps 25, 30, 42).
+Four views: a flat pericardium patch, a single cut leaflet, the assembled valve seen
+from the outflow side, and a backlit transillumination scan of the leaflet. The scan
+returns many small detections instead of one defect; the app draws the numbered boxes
+over the image, the way the vision system does on the light table.
 Deterministic for a given rng, so re-running the simulator reproduces images.
 """
 
@@ -15,6 +17,8 @@ SIZE = 320
 TISSUE = (226, 211, 176)
 FABRIC = (236, 236, 232)
 BG = (36, 44, 52)
+LIGHTBOX = (26, 38, 168)     # blue backlight of the transillumination table
+LEAFLET_LIT = (150, 190, 255)
 
 
 def _texture(rng: random.Random, base, amp=14):
@@ -80,6 +84,50 @@ def _valve(rng, img, misalign=False, gap=False):
     if misalign:
         bbox = (centre[0] - 40, centre[1] - 40, 80, 80)
     return (c, c, 70), bbox
+
+
+def transillumination(rng: random.Random, dets: list, path: str):
+    """Backlit leaflet: bright translucent belly, dark rim, one speck per detection.
+
+    `dets` are the vision system's hits (normalised boxes); the app overlays the
+    numbered rectangles, so the image itself stays the raw camera view.
+    """
+    img = Image.new("RGB", (SIZE, SIZE), (14, 18, 64))
+    d = ImageDraw.Draw(img)
+    for k in range(60):                                   # light table falls off at the edges
+        v = k / 60
+        d.ellipse((SIZE * 0.5 * v - 10, SIZE * 0.5 * v - 10, SIZE * (1 - 0.5 * v) + 10, SIZE * (1 - 0.5 * v) + 10),
+                  fill=tuple(int(a + (b - a) * v) for a, b in zip((14, 18, 64), LIGHTBOX)))
+
+    cx, cy = SIZE / 2, SIZE / 2 + 26
+    cusp = [(cx - 104, cy - 96), (cx + 104, cy - 96)]     # inverted cone, like the photo
+    for k in range(25):
+        a = math.pi * k / 24
+        cusp.append((cx + 104 * math.cos(a), cy - 96 + 138 * math.sin(a) ** 1.35))
+    # the valve body tents up behind the leaflet, dark against the backlight
+    d.polygon([(cx, cy - 210), (cx + 112, cy - 84), (cx - 112, cy - 84)], fill=(10, 14, 52))
+    d.line([(cx, cy - 210), (cx + 30, cy - 120), (cx + 112, cy - 84)], fill=(70, 96, 170), width=2)
+    lit = _texture(rng, LEAFLET_LIT, 10)
+    img.paste(lit, (0, 0), _mask(lambda m: m.polygon(cusp, fill=232)))
+    # dark folded edges either side, and the seam running up the middle
+    d.line(cusp[2:], fill=(8, 10, 40), width=7)
+    d.line([(cx, cy - 92), (cx, cy - 20)], fill=(120, 160, 230), width=2)
+    for k in range(3):
+        y = cy - 84 + k * 7
+        d.arc((cx - 96, y - 40, cx + 96, y + 60), 200, 340, fill=(180, 210, 255), width=1)
+
+    for det in dets:
+        x, y = det["bbox_x"] * SIZE + det["bbox_w"] * SIZE / 2, det["bbox_y"] * SIZE + det["bbox_h"] * SIZE / 2
+        s = max(1.2, det["size_mm"] * 9)
+        if det["cls"] == "FIBER":
+            a = rng.uniform(0, math.pi)
+            d.line([(x - s * math.cos(a), y - s * math.sin(a)), (x + s * math.cos(a), y + s * math.sin(a))],
+                   fill=(20, 24, 60), width=1)
+        elif det["cls"] == "THIN_SPOT":                   # thin tissue passes more light
+            d.ellipse((x - s, y - s * 0.8, x + s, y + s * 0.8), fill=(220, 240, 255))
+        else:
+            d.ellipse((x - s, y - s, x + s, y + s), fill=(16, 20, 54))
+    img.filter(ImageFilter.GaussianBlur(0.6)).save(path, optimize=True)
 
 
 def render(step_id: int, defect: str | None, rng: random.Random, path: str):

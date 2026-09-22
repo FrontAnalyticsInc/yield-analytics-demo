@@ -82,6 +82,26 @@ export function BBox({ b }: { b: { bbox_x: number | null; bbox_y: number | null;
   return <div className="bbox" style={{ left: `${b.bbox_x * 100}%`, top: `${b.bbox_y! * 100}%`, width: `${b.bbox_w! * 100}%`, height: `${b.bbox_h! * 100}%` }} />;
 }
 
+export type Det = {
+  idx: number; class: string; size_mm: number; confidence: number;
+  bbox_x: number; bbox_y: number; bbox_w: number; bbox_h: number;
+};
+
+/** The vision system's boxes on a transillumination scan, numbered as on the light table. */
+export function Dets({ dets, limit }: { dets: Det[]; limit?: number }) {
+  return (
+    <>
+      {dets.map((d) => (
+        <div key={d.idx} className={`det${limit && d.size_mm > limit ? " over" : ""}`}
+          style={{ left: `${d.bbox_x * 100}%`, top: `${d.bbox_y * 100}%`, width: `${d.bbox_w * 100}%`, height: `${d.bbox_h * 100}%` }}
+          title={`${d.idx}: ${label(d.class)} ${d.size_mm.toFixed(2)} mm (${Math.round(d.confidence * 100)}%)`}>
+          <span>{d.idx}</span>
+        </div>
+      ))}
+    </>
+  );
+}
+
 /** Interpolate the sequential ramp (lo -> hi) for heat cells. */
 export function seq(t: number, lo: string, hi: string) {
   const p = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));

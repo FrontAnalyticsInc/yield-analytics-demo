@@ -1,7 +1,8 @@
 # Yield Analytics Demo: surgical heart valves
 
-End-to-end manufacturing yield analytics for a 52-step heart valve line (~100 valves a month).
-It includes measurement SPC, five image-based quality inspections and two go/no-go gates, and shows up in two places:
+End-to-end manufacturing yield analytics for a 53-step heart valve line (~100 valves a month).
+It includes measurement SPC, five image-based quality inspections, a backlit transillumination
+scan that boxes every inclusion in the leaflet, and two go/no-go gates, and shows up in two places:
 
 - **Power BI** for KPI reporting: first-pass yield, rolled throughput yield, step yield, Pareto, SPC, vision-model accuracy.
 - **Deep-dive app** (FastAPI + React) for engineers: a root-cause explorer, SPC down to individual points, an inspection image gallery with defect overlays and AI-vs-inspector review, and the full device history for any serial number.
@@ -91,7 +92,7 @@ See [docs/powerbi.md](docs/powerbi.md). The semantic model is TMDL in `powerbi/`
 ```
 api/        FastAPI app (+ Dockerfile that also builds web/)
 web/        React + Vite + Recharts deep-dive UI
-sim/        simulator, routing (52 steps), synthetic image renderer
+sim/        simulator, routing (53 steps), synthetic image renderer
 exporter/   Parquet snapshot + optional Azure Blob upload
 db/         SQL Server / Azure SQL schema
 powerbi/    Power BI Project: TMDL semantic model + report skeleton

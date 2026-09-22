@@ -183,8 +183,11 @@ def inspections(step_id: int | None = None, true_class: str | None = None, ai_cl
     return q("""
         SELECT ev.event_id, ev.serial, ev.step_id, st.name step_name, ev.attempt, ev.ended_at, ev.operator_id,
                ev.equipment_id, ev.result, u.lot_id, l.tissue_lot, u.model,
-               i.true_class, i.ai_class, i.ai_confidence, i.bbox_x, i.bbox_y, i.bbox_w, i.bbox_h
+               i.true_class, i.ai_class, i.ai_confidence, i.bbox_x, i.bbox_y, i.bbox_w, i.bbox_h,
+               st.step_type, dt.n_det, dt.max_mm
         FROM mfg.inspection_image i JOIN mfg.step_event ev ON ev.event_id=i.event_id
+        LEFT JOIN (SELECT event_id, COUNT(*) n_det, MAX(size_mm) max_mm
+                   FROM mfg.inspection_detection GROUP BY event_id) dt ON dt.event_id=i.event_id
         JOIN mfg.step st ON st.step_id=ev.step_id JOIN mfg.unit u ON u.serial=ev.serial
         JOIN mfg.lot l ON l.lot_id=u.lot_id
         WHERE (%s IS NULL OR ev.step_id=%s) AND (%s IS NULL OR i.true_class=%s) AND (%s IS NULL OR i.ai_class=%s)
@@ -193,6 +196,13 @@ def inspections(step_id: int | None = None, true_class: str | None = None, ai_cl
         ORDER BY ev.ended_at DESC OFFSET %s ROWS FETCH NEXT %s ROWS ONLY""",
              (step_id, step_id, true_class, true_class, ai_class, ai_class, int(mismatch), lot, lot, lot,
               int(defects_only), offset, limit))
+
+
+@app.get("/api/inspections/{event_id}/detections")
+def detections(event_id: int):
+    """Every box the vision system drew on one transillumination scan."""
+    return q("SELECT idx, class, size_mm, confidence, bbox_x, bbox_y, bbox_w, bbox_h "
+             "FROM mfg.inspection_detection WHERE event_id=%s ORDER BY idx", (event_id,))
 
 
 @app.get("/api/inspections/confusion")
@@ -249,7 +259,8 @@ def unit(serial: str):
     events = q("""
         SELECT ev.*, st.name step_name, st.area, st.step_type, st.param_name, st.param_unit, st.lsl, st.target,
                st.usl, m.value, i.true_class, i.ai_class, i.ai_confidence, i.bbox_x, i.bbox_y, i.bbox_w, i.bbox_h,
-               CASE WHEN i.event_id IS NULL THEN 0 ELSE 1 END has_image
+               CASE WHEN i.event_id IS NULL THEN 0 ELSE 1 END has_image,
+               (SELECT COUNT(*) FROM mfg.inspection_detection dd WHERE dd.event_id=ev.event_id) n_det
         FROM mfg.step_event ev JOIN mfg.step st ON st.step_id=ev.step_id
         LEFT JOIN mfg.measurement m ON m.event_id=ev.event_id
         LEFT JOIN mfg.inspection_image i ON i.event_id=ev.event_id

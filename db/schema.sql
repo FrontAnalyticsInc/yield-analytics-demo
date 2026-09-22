@@ -94,6 +94,18 @@ CREATE TABLE mfg.inspection_image (
 );
 GO
 
+IF OBJECT_ID('mfg.inspection_detection') IS NULL
+CREATE TABLE mfg.inspection_detection (
+    event_id        BIGINT      NOT NULL REFERENCES mfg.step_event(event_id),
+    idx             INT         NOT NULL,              -- the number the vision system paints on the box
+    class           VARCHAR(16) NOT NULL,              -- INCLUSION | PARTICLE | THIN_SPOT | FIBER
+    size_mm         FLOAT       NOT NULL,
+    confidence      FLOAT       NOT NULL,
+    bbox_x FLOAT NOT NULL, bbox_y FLOAT NOT NULL, bbox_w FLOAT NOT NULL, bbox_h FLOAT NOT NULL,
+    PRIMARY KEY (event_id, idx)
+);
+GO
+
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_event_step_time')
     CREATE INDEX ix_event_step_time ON mfg.step_event(step_id, ended_at) INCLUDE (result, defect_code, equipment_id, operator_id);
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_unit_started')

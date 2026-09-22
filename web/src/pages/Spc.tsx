@@ -21,8 +21,10 @@ export default function Spc() {
   const [sp, setSp] = useSearchParams();
   const meta = useApi<{ steps: Step[] }>("/api/meta");
   const mSteps = (meta.data?.steps ?? []).filter((s) => s.step_type === "measurement");
-  const stepId = sp.get("step") ?? "15";
-  const r = useApi<Resp>(`/api/spc/${stepId}${qs({ start: f.start })}`);
+  // default to the step with the built-in drift story, by name: step ids move when the route changes
+  const fallback = mSteps.find((s) => s.name === "Wireform diameter check") ?? mSteps[0];
+  const stepId = sp.get("step") ?? (fallback ? String(fallback.step_id) : "");
+  const r = useApi<Resp>(stepId ? `/api/spc/${stepId}${qs({ start: f.start })}` : null);
   const d = r.data;
   const stations = Object.keys(d?.by_equipment ?? {});
   const colors = [c.s1, c.s2, c.s3];

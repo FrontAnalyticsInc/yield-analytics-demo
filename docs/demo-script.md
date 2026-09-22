@@ -1,4 +1,4 @@
-# Demo script (≈18 minutes)
+# Demo script (≈21 minutes)
 
 **Setup:** open https://yield.frontanalytics.com and the Power BI report side by side.
 
@@ -8,8 +8,9 @@
 4. **A measurement problem (app → SPC → Wireform diameter, 3 min).** Split by station: MS-15-2 drifts above USL from mid-May, peaks late June, and is fixed in early July. Cpk is 1.47 for the good station and 0.87 for the drifting one. Click an out-of-spec point to open that valve's full device history and see the rework and re-measure.
 5. **A supplier problem (app → Root-cause explorer → Tissue lot, area Tissue, 2 min).** PT-2606-B fails at about 3× the other lots, almost all calcific spots. Go to Image inspections, filter to *Calcific spot*, and show the images.
 6. **A people/training problem (Root-cause explorer → Operator, area Assembly, 2 min).** OP-07 runs at about 4× the line average on suture defects, and the rate falls month by month (switch the slice to *Month* with the step set to *Suture line inspection*).
-7. **AI-assisted inspection (Image inspections, 3 min).** 97% AI/inspector agreement overall, but the confusion matrix shows the model misses about a third of fiber/particulate defects. Click the "Fiber particle → AI OK" cell to see the images the model missed. This is the business case for a human-review queue and retraining loop (see the architecture doc).
-8. **Designed experiment (Experiments, 4 min).** *New experiment* → keep commissure height and the two example factors. The noise comes from the line, and the calculator sizes the experiment (≈19 units) and draws the square. Enter an expected change of 0.05 mm for tension to show the "is the gap big enough?" warning. Save → **Simulate results** → Analyze: verdicts, best settings, charts, then *Reveal the simulated truth*.
-9. **Scale story (docs/architecture.md, 2 min).** The same schema and app run on Azure: Event Hubs, a lakehouse, Azure ML scoring, Container Apps with Entra SSO, and Power BI with RLS, at roughly $1–2k/month for 20–50 users.
+7. **Transillumination scan (Image inspections → Leaflet transillumination scan, 3 min).** The leaflet is backlit and the vision system boxes every inclusion it can see; accept/reject is a count-and-size rule (18 hits, 0.55 mm), not one defect. Open a rejected scan to show the numbered boxes and the measured sizes, and point out that the inspector sometimes overrules the rule on a borderline scan — that disagreement is exactly the review queue the architecture doc proposes. Tissue lot PT-2606-B runs visibly more hits per scan.
+8. **AI-assisted inspection (Image inspections, 3 min).** 97% AI/inspector agreement overall, but the confusion matrix shows the model misses about a third of fiber/particulate defects. Click the "Fiber particle → AI OK" cell to see the images the model missed. This is the business case for a human-review queue and retraining loop (see the architecture doc).
+9. **Designed experiment (Experiments, 4 min).** *New experiment* → keep commissure height and the two example factors. The noise comes from the line, and the calculator sizes the experiment (≈19 units) and draws the square. Enter an expected change of 0.05 mm for tension to show the "is the gap big enough?" warning. Save → **Simulate results** → Analyze: verdicts, best settings, charts, then *Reveal the simulated truth*.
+10. **Scale story (docs/architecture.md, 2 min).** The same schema and app run on Azure: Event Hubs, a lakehouse, Azure ML scoring, Container Apps with Entra SSO, and Power BI with RLS, at roughly $1–2k/month for 20–50 users.
 
 **Live data:** the simulator adds new production every 15 minutes, so WIP and "newest first" in the gallery change during the meeting.

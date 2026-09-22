@@ -1,23 +1,27 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { BBox, dt, label, num, pct, qs, Result, seq, useApi, useColors } from "../lib";
+import { BBox, Det, Dets, dt, label, num, pct, qs, Result, seq, useApi, useColors } from "../lib";
 
 type Insp = {
   event_id: number; serial: string; step_id: number; step_name: string; attempt: number; ended_at: string;
   operator_id: string; equipment_id: string; result: string; lot_id: string; tissue_lot: string; model: string;
   true_class: string; ai_class: string; ai_confidence: number;
   bbox_x: number | null; bbox_y: number | null; bbox_w: number | null; bbox_h: number | null;
+  step_type: string; n_det: number | null; max_mm: number | null;
 };
+type StepRow = { step_id: number; name: string; step_type: string };
+const SCAN_LIMIT_MM = 0.55;   // matches SCAN_LIMITS in sim/routing.py
 type Cell = { true_class: string; ai_class: string; n: number };
-const VISUAL = [[1, "Pericardium receiving"], [10, "Leaflet visual"], [25, "Suture line"], [30, "Coaptation"], [44, "Final visual"]] as const;
-const CLASSES = ["ok", "TISSUE_TEAR", "CALCIFIC_SPOT", "FIBER_PARTICLE", "SUTURE_GAP", "LEAFLET_MISALIGN"];
+const CLASSES = ["ok", "TISSUE_TEAR", "CALCIFIC_SPOT", "FIBER_PARTICLE", "SUTURE_GAP", "LEAFLET_MISALIGN", "INCLUSION_EXCESS"];
 const PAGE = 60;
 
-export function Shot({ i, big = false }: { i: Insp; big?: boolean }) {
+export function Shot({ i, big = false, dets }: { i: Insp; big?: boolean; dets?: Det[] }) {
   return (
     <div className="img">
       <img src={`/api/images/${i.event_id}.png`} alt={`${i.step_name} for ${i.serial}: ${label(i.true_class)}`} loading="lazy" />
       {(big || i.true_class !== "ok") && <BBox b={i} />}
+      {dets?.length ? <Dets dets={dets} limit={SCAN_LIMIT_MM} /> : null}
+      {!dets && i.n_det ? <span className="count">{i.n_det}</span> : null}
     </div>
   );
 }
@@ -37,12 +41,21 @@ export default function Inspections() {
   const set = (k: string, v: string) => { const n = new URLSearchParams(sp); v ? n.set(k, v) : n.delete(k); setSp(n, { replace: true }); };
   const [items, setItems] = useState<Insp[]>([]);
   const [offset, setOffset] = useState(0);
-  const [open, setOpen] = useState<Insp | null>(null);
+  const [open, setOpenState] = useState<Insp | null>(null);
+  const setOpen = (i: Insp | null) => { setOpenState(i); set("img", i ? String(i.event_id) : ""); };
   const filt = qs({ step_id: step, true_class: cls, mismatch, defects_only: defectsOnly && !cls });
   const page = useApi<Insp[]>(`/api/inspections${filt}${filt ? "&" : "?"}limit=${PAGE}&offset=${offset}`);
   const cm = useApi<Cell[]>(`/api/inspections/confusion${qs({ step_id: step })}`);
+  const meta = useApi<{ steps: StepRow[] }>("/api/meta");
+  const imageSteps = (meta.data?.steps ?? []).filter((s) => s.step_type === "visual" || s.step_type === "scan");
+  const dets = useApi<Det[]>(open && open.n_det ? `/api/inspections/${open.event_id}/detections` : null);
 
   useEffect(() => { setItems([]); setOffset(0); }, [filt]);
+  useEffect(() => {   // deep link: ?img=<event_id> opens that image once the page it is on has loaded
+    const id = Number(sp.get("img"));
+    if (id && open?.event_id !== id) { const hit = items.find((i) => i.event_id === id); if (hit) setOpenState(hit); }
+    if (!id && open) setOpenState(null);
+  }, [items, sp]);  // eslint-disable-line
   useEffect(() => { if (page.data) setItems((prev) => (offset === 0 ? page.data! : [...prev, ...page.data!])); }, [page.data]);  // eslint-disable-line
   useEffect(() => { const k = (e: KeyboardEvent) => e.key === "Escape" && setOpen(null); addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, []);
 
@@ -57,11 +70,11 @@ export default function Inspections() {
   return (
     <>
       <h1>Image inspections</h1>
-      <p className="sub">Five visual steps capture an image of every valve. Inspectors disposition each one; a vision model scores it in parallel.{step && <> <Link to={`/flow?step=${step}&view=caused`}>See what this check catches in the process flow →</Link></>}</p>
+      <p className="sub">Six imaging steps capture a picture of every valve: five inspections and one backlit transillumination scan. Inspectors disposition each one; a vision model scores it in parallel.{step && <> <Link to={`/flow?step=${step}&view=caused`}>See what this check catches in the process flow →</Link></>}</p>
       <div className="toolbar">
-        <label>Visual step
+        <label>Imaging step
           <select value={step} onChange={(e) => set("step", e.target.value)}>
-            <option value="">All visual steps</option>{VISUAL.map(([id, n]) => <option key={id} value={id}>{id}. {n}</option>)}
+            <option value="">All imaging steps</option>{imageSteps.map((s) => <option key={s.step_id} value={s.step_id}>{s.step_id}. {s.name}</option>)}
           </select>
         </label>
         <label>Inspector finding
@@ -76,7 +89,7 @@ export default function Inspections() {
       <div className="grid g3">
         <div className="card">
           <h2>Gallery</h2>
-          <p className="hint">Newest first · yellow box marks the defect region · click for detail</p>
+          <p className="hint">Newest first · yellow box marks the defect region, a number is the count of scan detections · click for detail</p>
           {items.length === 0 ? <div className="empty">{page.loading ? "Loading…" : "No images match."}</div> : (
             <div className="gallery">
               {items.map((i) => (
@@ -114,14 +127,14 @@ export default function Inspections() {
               </tbody>
             </table>
           </div>
-          <p className="hint" style={{ marginTop: 10 }}>Diagonal = agreement. Column initials: TT tear, CS calcific spot, FP fiber/particle, SG suture gap, LM leaflet misalign.</p>
+          <p className="hint" style={{ marginTop: 10 }}>Diagonal = agreement. Column initials: TT tear, CS calcific spot, FP fiber/particle, SG suture gap, LM leaflet misalign, IE inclusion excess.</p>
         </div>
       </div>
 
       {open && (
         <div className="modal-bg" onClick={() => setOpen(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Inspection detail">
-            <Shot i={open} big />
+            <Shot i={open} big dets={dets.data ?? undefined} />
             <div className="info">
               <h2>{label(open.true_class)}</h2>
               <Verdict i={open} />
@@ -131,6 +144,10 @@ export default function Inspections() {
                 <dt>Attempt</dt><dd>{open.attempt}</dd>
                 <dt>Result</dt><dd><Result r={open.result} /></dd>
                 <dt>AI call</dt><dd>{label(open.ai_class)} ({pct(open.ai_confidence, 0)})</dd>
+                {open.n_det != null && <>
+                  <dt>Detections</dt><dd>{num(open.n_det)} of {18} allowed</dd>
+                  <dt>Largest</dt><dd className={open.max_mm! > SCAN_LIMIT_MM ? "over" : ""}>{num(open.max_mm, 2)} mm of {SCAN_LIMIT_MM} allowed</dd>
+                </>}
                 <dt>Operator</dt><dd>{open.operator_id}</dd>
                 <dt>Station</dt><dd>{open.equipment_id}</dd>
                 <dt>Tissue lot</dt><dd>{open.tissue_lot}</dd>

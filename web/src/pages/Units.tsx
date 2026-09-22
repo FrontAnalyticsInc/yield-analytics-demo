@@ -4,7 +4,7 @@ import { BBox, dt, label, num, qs, Result, useApi } from "../lib";
 
 type Unit = { serial: string; lot_id: string; tissue_lot: string; model: string; started_at: string; completed_at: string | null; status: string; first_pass: boolean | null; issues: number; last_step: number };
 type Ev = {
-  event_id: number; step_id: number; step_name: string; area: string; step_type: string; attempt: number; started_at: string; ended_at: string;
+  event_id: number; step_id: number; step_name: string; n_det: number | null; area: string; step_type: string; attempt: number; started_at: string; ended_at: string;
   operator_id: string; equipment_id: string; result: string; defect_code: string | null; param_name: string | null; param_unit: string | null;
   lsl: number | null; target: number | null; usl: number | null; value: number | null; has_image: number; true_class: string | null; ai_class: string | null;
   ai_confidence: number | null; bbox_x: number | null; bbox_y: number | null; bbox_w: number | null; bbox_h: number | null;
