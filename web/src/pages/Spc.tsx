@@ -1,5 +1,5 @@
 import { CartesianGrid, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from "recharts";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { PeriodBar, useFilters } from "../main";
 import { axisProps, day, dt, num, qs, Tip, useApi, useColors } from "../lib";
 
@@ -33,7 +33,7 @@ export default function Spc() {
   return (
     <>
       <h1>SPC &amp; process capability</h1>
-      <p className="sub">Every measurement against its spec limits, split by measuring station.</p>
+      <p className="sub">Every measurement against its spec limits, split by measuring station. <Link to={`/flow?step=${stepId}`}>See this step in the process flow →</Link></p>
       <div className="toolbar">
         <label>Measurement step
           <select value={stepId} onChange={(e) => setSp({ step: e.target.value }, { replace: true })}>

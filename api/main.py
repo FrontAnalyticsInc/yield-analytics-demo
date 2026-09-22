@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 import experiments
+import flow
 from db import connect, q
 
 IMAGE_DIR = Path(os.environ.get("IMAGE_DIR", "/data/images"))
@@ -19,6 +20,7 @@ EXPORT_KEY = os.environ.get("EXPORT_KEY", "")
 
 app = FastAPI(title="Yield Analytics API")
 app.include_router(experiments.router)
+app.include_router(flow.router)
 
 
 

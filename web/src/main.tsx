@@ -9,6 +9,7 @@ import Inspections from "./pages/Inspections";
 import Units from "./pages/Units";
 import Experiments from "./pages/Experiments";
 import DoeDesign from "./pages/DoeDesign";
+import Flow from "./pages/Flow";
 
 type Filters = { months: number; model: string; start: string; setMonths: (m: number) => void; setModel: (m: string) => void };
 const Ctx = createContext<Filters>(null!);
@@ -54,6 +55,7 @@ function App() {
             <div>Valve Yield<small>Deep-dive analytics</small></div>
           </div>
           <NavLink to="/" end>Overview</NavLink>
+          <NavLink to="/flow">Process flow</NavLink>
           <NavLink to="/explore">Root-cause explorer</NavLink>
           <NavLink to="/spc">SPC &amp; capability</NavLink>
           <NavLink to="/inspections">Image inspections</NavLink>
@@ -65,6 +67,7 @@ function App() {
         <main>
           <Routes>
             <Route path="/" element={<Overview />} />
+            <Route path="/flow" element={<Flow />} />
             <Route path="/explore" element={<Explorer />} />
             <Route path="/spc" element={<Spc />} />
             <Route path="/inspections" element={<Inspections />} />
