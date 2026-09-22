@@ -41,7 +41,7 @@ Frontend development: `cd web && npm install && npm run dev` (proxies `/api` to 
 
 ## Experiments (design of experiments)
 
-*Experiments → New experiment* sizes a two-level factorial for 2–3 factors, numeric or categorical:
+*Experiments → New experiment* sizes a two-level factorial for 1–3 factors (two by default), numeric or categorical:
 
 - **Noise from the line:** σ comes from the response step's last 90 days; you enter the smallest change that matters.
 - **Corner repeats:** calculated so the change is detected with 80% (Standard) or 90% (Strict) probability at 95% confidence, N ≈ 4σ²(z₁₋α/₂+z₁₋β)²/Δ².

@@ -140,7 +140,12 @@ CREATE TABLE mfg.experiment_run (
     run_no         INT         NOT NULL,                         -- randomised execution order, 1-based
     point_type     VARCHAR(8)  NOT NULL,                         -- corner | center
     replicate      TINYINT     NOT NULL,
-    x1 SMALLINT NOT NULL, x2 SMALLINT NOT NULL, x3 SMALLINT NULL, -- coded -1 / 0 / +1
+    x1 SMALLINT NOT NULL, x2 SMALLINT NULL, x3 SMALLINT NULL,    -- coded -1 / 0 / +1; NULL when fewer factors
     PRIMARY KEY (experiment_id, run_no)
 );
+GO
+
+-- single-factor experiments (x2 was NOT NULL in the first release)
+IF COLUMNPROPERTY(OBJECT_ID('mfg.experiment_run'), 'x2', 'AllowsNull') = 0
+    ALTER TABLE mfg.experiment_run ALTER COLUMN x2 SMALLINT NULL;
 GO

@@ -311,7 +311,7 @@ class ExperimentIn(BaseModel):
     replicates: int = Field(ge=1, le=20)
     center_points: int = Field(ge=0, le=20)
     seed: int
-    factors: list[FactorIn] = Field(min_length=2, max_length=3)
+    factors: list[FactorIn] = Field(min_length=1, max_length=3)
     runs: list[RunIn]
 
 

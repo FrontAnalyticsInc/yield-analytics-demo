@@ -128,7 +128,7 @@ export default function DoeDesign() {
 
           <section className="card">
             <h2><span className="stepno">2</span>Which settings will you change?</h2>
-            <p className="hint">Two or three factors, each at a low and a high setting. Categorical factors are things like a station or a material lot.</p>
+            <p className="hint">One to three factors, each at a low and a high setting. One factor is a simple low-vs-high comparison; two or three also show whether settings interact. Categorical factors are things like a station or a material lot.</p>
             {factors.map((f, i) => (
               <div className="factor" key={i}>
                 <div className="factor-head">
@@ -138,7 +138,7 @@ export default function DoeDesign() {
                     <button className={f.kind === "numeric" ? "on" : ""} onClick={() => setF(i, { kind: "numeric" })}>Numeric</button>
                     <button className={f.kind === "categorical" ? "on" : ""} onClick={() => setF(i, { kind: "categorical" })}>Categorical</button>
                   </span>
-                  {k > 2 && <button className="linkbtn" aria-label={`Remove factor ${i + 1}`} onClick={() => setFactors(factors.filter((_, j) => j !== i))}>Remove</button>}
+                  {k > 1 && <button className="linkbtn" aria-label={`Remove factor ${i + 1}`} onClick={() => setFactors(factors.filter((_, j) => j !== i))}>Remove</button>}
                 </div>
                 {f.kind === "numeric" ? (
                   <div className="factor-levels">
@@ -155,7 +155,7 @@ export default function DoeDesign() {
                 )}
               </div>
             ))}
-            {k < 3 && <button className="btn" onClick={() => setFactors([...factors, blankFactor()])}>+ Add a third factor</button>}
+            {k < 3 && <button className="btn" onClick={() => setFactors([...factors, blankFactor()])}>+ Add {k === 1 ? "a second" : "a third"} factor</button>}
             {errs.length > 0 && <ul className="errs">{errs.map((e) => <li key={e}>{e}</li>)}</ul>}
           </section>
 
@@ -168,9 +168,9 @@ export default function DoeDesign() {
             </div>
             <p className="hint">{CONFIDENCE[conf].hint}</p>
             <div className="row2">
-              <label className="field">Repeats of each corner: <b>{reps}</b> {repOverride == null ? "(recommended)" : <button className="linkbtn" onClick={() => setRepOverride(null)}>reset to {recReps}</button>}
+              <label className="field">Repeats of each {k === 1 ? "setting" : "corner"}: <b>{reps}</b> {repOverride == null ? "(recommended)" : <button className="linkbtn" onClick={() => setRepOverride(null)}>reset to {recReps}</button>}
                 <input type="range" min={1} max={Math.max(8, recReps + 2)} value={reps} onChange={(e) => setRepOverride(+e.target.value)} />
-                <span className="hint">{2 ** k} corners × {reps} = {cornerN} runs · needs about {Math.ceil(needed)} to hit {pct(power, 0)}</span>
+                <span className="hint">{2 ** k} {k === 1 ? "settings" : "corners"} × {reps} = {cornerN} runs · needs about {Math.ceil(needed)} to hit {pct(power, 0)}</span>
               </label>
               <label className="field">Middle (centre) points: <b>{rule.applicable ? perCombo * rule.combos : 0}</b>
                 {rule.applicable ? (
@@ -191,7 +191,7 @@ export default function DoeDesign() {
             </div>
             {!errs.length && (
               <p className="verdict">
-                Run <b>{2 ** k} corners × {reps}</b>{centers ? <> plus <b>{centers} middle point{centers > 1 ? "s" : ""}</b></> : null}.
+                Run <b>{2 ** k} {k === 1 ? "settings" : "corners"} × {reps}</b>{centers ? <> plus <b>{centers} middle point{centers > 1 ? "s" : ""}</b></> : null}.
                 {chance >= power - 0.005 ? " That meets the target." : ` That is below the ${pct(power, 0)} target; add repeats or accept a larger change.`}
               </p>
             )}
