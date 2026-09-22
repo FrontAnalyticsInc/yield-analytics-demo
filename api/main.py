@@ -9,6 +9,7 @@ import pymssql
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 IMAGE_DIR = Path(os.environ.get("IMAGE_DIR", "/data/images"))
 STATIC_DIR = Path(os.environ.get("STATIC_DIR", "/app/static"))
@@ -18,9 +19,13 @@ EXPORT_KEY = os.environ.get("EXPORT_KEY", "")
 app = FastAPI(title="Yield Analytics API")
 
 
-def q(sql: str, params: tuple = ()) -> list[dict]:
-    conn = pymssql.connect(server=os.environ.get("DB_HOST", "db"), user=os.environ.get("DB_USER", "sa"),
+def connect():
+    return pymssql.connect(server=os.environ.get("DB_HOST", "db"), user=os.environ.get("DB_USER", "sa"),
                            password=os.environ["DB_PASSWORD"], database="yield", as_dict=True)
+
+
+def q(sql: str, params: tuple = ()) -> list[dict]:
+    conn = connect()
     try:
         cur = conn.cursor()
         cur.execute(sql, params)
@@ -259,6 +264,131 @@ def unit(serial: str):
         LEFT JOIN mfg.inspection_image i ON i.event_id=ev.event_id
         WHERE ev.serial=%s ORDER BY ev.started_at""", (serial,))
     return {**u[0], "events": events}
+
+
+# --- design of experiments ------------------------------------------------------------
+
+@app.get("/api/doe/noise/{step_id}")
+def doe_noise(step_id: int, days: int = 90):
+    """Process noise for a measurement step, used to size an experiment."""
+    st = q("SELECT * FROM mfg.step WHERE step_id=%s AND step_type='measurement'", (step_id,))
+    if not st:
+        raise HTTPException(404, "not a measurement step")
+    r = q("""
+        SELECT COUNT(*) n, AVG(m.value) mean, STDEV(m.value) sd
+        FROM mfg.step_event ev JOIN mfg.measurement m ON m.event_id=ev.event_id
+        WHERE ev.step_id=%s AND ev.attempt=1 AND ev.ended_at >= DATEADD(day, -%s, SYSUTCDATETIME())""", (step_id, days))[0]
+    return {"step": st[0], "days": days, **r}
+
+
+class FactorIn(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+    kind: str = Field(pattern="^(numeric|categorical)$")
+    units: str = Field("", max_length=20)
+    low: float | None = None
+    high: float | None = None
+    lowLabel: str = Field("", max_length=40)
+    highLabel: str = Field("", max_length=40)
+
+
+class RunIn(BaseModel):
+    runNo: int
+    pointType: str = Field(pattern="^(corner|center)$")
+    replicate: int
+    x: list[int]
+
+
+class ExperimentIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    objective: str = Field("", max_length=400)
+    notes: str = ""
+    created_by: str
+    response_step_id: int
+    sigma: float = Field(gt=0)
+    effect_size: float = Field(gt=0)
+    alpha: float = Field(gt=0, lt=0.5)
+    power_target: float = Field(gt=0.5, lt=1)
+    replicates: int = Field(ge=1, le=20)
+    center_points: int = Field(ge=0, le=20)
+    seed: int
+    factors: list[FactorIn] = Field(min_length=2, max_length=3)
+    runs: list[RunIn]
+
+
+@app.post("/api/experiments", status_code=201)
+def create_experiment(e: ExperimentIn):
+    k = len(e.factors)
+    for f in e.factors:
+        if f.kind == "numeric" and not (f.low is not None and f.high is not None and f.high > f.low):
+            raise HTTPException(422, f"{f.name}: high must be greater than low")
+        if f.kind == "categorical" and (not f.lowLabel or not f.highLabel or f.lowLabel == f.highLabel):
+            raise HTTPException(422, f"{f.name}: two different values required")
+    corners = [r for r in e.runs if r.pointType == "corner"]
+    centers = [r for r in e.runs if r.pointType == "center"]
+    if len(corners) != e.replicates * 2 ** k or len(centers) != e.center_points:
+        raise HTTPException(422, "run list does not match replicates / centre points")
+    if sorted(r.runNo for r in e.runs) != list(range(1, len(e.runs) + 1)) or any(len(r.x) != k for r in e.runs):
+        raise HTTPException(422, "malformed run list")
+    if not q("SELECT 1 x FROM mfg.operator WHERE operator_id=%s", (e.created_by,)):
+        raise HTTPException(422, "unknown operator")
+
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT mfg.experiment (name, objective, notes, created_by, response_step_id, sigma, effect_size, alpha,
+                                   power_target, replicates, center_points, seed)
+            OUTPUT INSERTED.experiment_id
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    (e.name, e.objective or None, e.notes or None, e.created_by, e.response_step_id, e.sigma,
+                     e.effect_size, e.alpha, e.power_target, e.replicates, e.center_points, e.seed))
+        eid = cur.fetchone()["experiment_id"]
+        for i, f in enumerate(e.factors, 1):
+            cur.execute("INSERT mfg.experiment_factor VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                        (eid, i, f.name, f.kind, f.units or None, f.low if f.kind == "numeric" else None,
+                         f.high if f.kind == "numeric" else None, f.lowLabel if f.kind == "categorical" else None,
+                         f.highLabel if f.kind == "categorical" else None))
+        for r in e.runs:
+            x = r.x + [None] * (3 - k)
+            cur.execute("INSERT mfg.experiment_run VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                        (eid, r.runNo, r.pointType, r.replicate, x[0], x[1], x[2]))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    return {"experiment_id": eid}
+
+
+@app.get("/api/experiments")
+def list_experiments():
+    return q("""
+        SELECT e.experiment_id, e.name, e.objective, e.status, e.created_at, e.created_by, o.name created_by_name,
+               s.name response, (SELECT COUNT(*) FROM mfg.experiment_factor f WHERE f.experiment_id=e.experiment_id) factors,
+               (SELECT COUNT(*) FROM mfg.experiment_run r WHERE r.experiment_id=e.experiment_id) runs
+        FROM mfg.experiment e JOIN mfg.step s ON s.step_id=e.response_step_id JOIN mfg.operator o ON o.operator_id=e.created_by
+        ORDER BY e.created_at DESC""")
+
+
+@app.get("/api/experiments/{eid}")
+def get_experiment(eid: int):
+    e = q("""SELECT e.*, o.name created_by_name, s.name response, s.param_name, s.param_unit, s.lsl, s.target, s.usl
+             FROM mfg.experiment e JOIN mfg.step s ON s.step_id=e.response_step_id
+             JOIN mfg.operator o ON o.operator_id=e.created_by WHERE e.experiment_id=%s""", (eid,))
+    if not e:
+        raise HTTPException(404)
+    factors = q("SELECT * FROM mfg.experiment_factor WHERE experiment_id=%s ORDER BY factor_no", (eid,))
+    runs = q("SELECT * FROM mfg.experiment_run WHERE experiment_id=%s ORDER BY run_no", (eid,))
+    k = len(factors)
+    return {
+        **e[0],
+        "factors": [{"name": f["name"], "kind": f["kind"], "units": f["units"] or "", "low": f["low_value"] or 0,
+                     "high": f["high_value"] or 0, "lowLabel": f["low_label"] or "", "highLabel": f["high_label"] or ""}
+                    for f in factors],
+        "runs": [{"runNo": r["run_no"], "pointType": r["point_type"], "replicate": r["replicate"],
+                  "x": [r["x1"], r["x2"], r["x3"]][:k]} for r in runs],
+    }
 
 
 # --- React build (must be last) --------------------------------------------------------

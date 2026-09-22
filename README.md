@@ -39,6 +39,17 @@ Frontend development: `cd web && npm install && npm run dev` (proxies `/api` to 
 | Root-cause explorer → Operator, area *Assembly* | New hire **OP-07** (swing shift, started March 2026) has a suture learning curve |
 | Image inspections → *Only AI / inspector disagreements* | The vision model misses about a third of faint fibers/particulates, plus about 2% false positives |
 
+## Experiments (design of experiments)
+
+*Experiments → New experiment* sizes a two-level factorial for 2–3 factors, numeric or categorical:
+
+- **Noise from the line:** σ comes from the response step's last 90 days; you enter the smallest change that matters.
+- **Corner repeats:** calculated so the change is detected with 80% (Standard) or 90% (Strict) probability at 95% confidence, N ≈ 4σ²(z₁₋α/₂+z₁₋β)²/Δ².
+- **Middle points:** set at the middle of the numeric factors only. There are 3 by default, fixed at the start, middle and end of the run order for curvature and drift checks, and split across values when a factor is categorical.
+- **Diagram:** the design is drawn as a line, square or cube (one panel per categorical value), with a randomised run sheet. Save it with a name, objective, operator and notes.
+
+Running (tagging units, confirming settings) and analysis come next.
+
 A walkthrough is in [docs/demo-script.md](docs/demo-script.md).
 
 ## Deploy to walden

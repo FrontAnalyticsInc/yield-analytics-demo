@@ -99,3 +99,48 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_event_step_time')
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_unit_started')
     CREATE INDEX ix_unit_started ON mfg.unit(started_at) INCLUDE (status, first_pass, model, lot_id);
 GO
+
+-- Design of experiments ----------------------------------------------------------
+IF OBJECT_ID('mfg.experiment') IS NULL
+CREATE TABLE mfg.experiment (
+    experiment_id     INT IDENTITY(1,1) PRIMARY KEY,
+    name              NVARCHAR(120) NOT NULL,
+    objective         NVARCHAR(400) NULL,
+    notes             NVARCHAR(MAX) NULL,
+    created_by        VARCHAR(8)   NOT NULL REFERENCES mfg.operator(operator_id),
+    created_at        DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME(),
+    status            VARCHAR(12)  NOT NULL DEFAULT 'planned',   -- planned | running | complete | cancelled
+    response_step_id  INT          NOT NULL REFERENCES mfg.step(step_id),
+    sigma             FLOAT        NOT NULL,                     -- process noise used for sizing
+    effect_size       FLOAT        NOT NULL,                     -- smallest change worth detecting (response units)
+    alpha             FLOAT        NOT NULL,
+    power_target      FLOAT        NOT NULL,
+    replicates        INT          NOT NULL,                     -- per corner
+    center_points     INT          NOT NULL,                     -- total centre runs
+    seed              INT          NOT NULL                      -- run-order shuffle
+);
+
+IF OBJECT_ID('mfg.experiment_factor') IS NULL
+CREATE TABLE mfg.experiment_factor (
+    experiment_id  INT          NOT NULL REFERENCES mfg.experiment(experiment_id),
+    factor_no      TINYINT      NOT NULL,                        -- 1..3, matches x1..x3 on runs
+    name           NVARCHAR(60) NOT NULL,
+    kind           VARCHAR(12)  NOT NULL,                        -- numeric | categorical
+    units          NVARCHAR(20) NULL,
+    low_value      FLOAT        NULL,                            -- numeric only
+    high_value     FLOAT        NULL,
+    low_label      NVARCHAR(40) NULL,                            -- categorical only
+    high_label     NVARCHAR(40) NULL,
+    PRIMARY KEY (experiment_id, factor_no)
+);
+
+IF OBJECT_ID('mfg.experiment_run') IS NULL
+CREATE TABLE mfg.experiment_run (
+    experiment_id  INT         NOT NULL REFERENCES mfg.experiment(experiment_id),
+    run_no         INT         NOT NULL,                         -- randomised execution order, 1-based
+    point_type     VARCHAR(8)  NOT NULL,                         -- corner | center
+    replicate      TINYINT     NOT NULL,
+    x1 SMALLINT NOT NULL, x2 SMALLINT NOT NULL, x3 SMALLINT NULL, -- coded -1 / 0 / +1
+    PRIMARY KEY (experiment_id, run_no)
+);
+GO

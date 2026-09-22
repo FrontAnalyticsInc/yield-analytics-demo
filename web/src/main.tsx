@@ -7,6 +7,8 @@ import Explorer from "./pages/Explorer";
 import Spc from "./pages/Spc";
 import Inspections from "./pages/Inspections";
 import Units from "./pages/Units";
+import Experiments from "./pages/Experiments";
+import DoeDesign from "./pages/DoeDesign";
 
 type Filters = { months: number; model: string; start: string; setMonths: (m: number) => void; setModel: (m: string) => void };
 const Ctx = createContext<Filters>(null!);
@@ -56,6 +58,8 @@ function App() {
           <NavLink to="/spc">SPC &amp; capability</NavLink>
           <NavLink to="/inspections">Image inspections</NavLink>
           <NavLink to="/units">Unit genealogy</NavLink>
+          <div className="navhead">Improve</div>
+          <NavLink to="/experiments">Experiments</NavLink>
           <div className="foot">Synthetic demo data<br />Front Analytics</div>
         </nav>
         <main>
@@ -66,6 +70,9 @@ function App() {
             <Route path="/inspections" element={<Inspections />} />
             <Route path="/units" element={<Units />} />
             <Route path="/units/:serial" element={<Units />} />
+            <Route path="/experiments" element={<Experiments />} />
+            <Route path="/experiments/new" element={<DoeDesign />} />
+            <Route path="/experiments/:id" element={<Experiments />} />
           </Routes>
         </main>
       </div>
