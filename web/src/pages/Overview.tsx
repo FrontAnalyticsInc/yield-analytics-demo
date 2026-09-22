@@ -20,6 +20,9 @@ export default function Overview() {
   const s = useApi<Summary>(`/api/summary${qs({ start: f.start, model: f.model, grain })}`);
   const steps = useApi<Step[]>(`/api/steps${p}`);
   const pareto = useApi<Pareto[]>(`/api/pareto${qs({ start: f.start })}`);
+  const trend = s.data?.trend ?? [];
+  const yFloor = Math.max(0, Math.min(0.5, Math.floor((Math.min(1, ...trend.map((t) => t.fpy)) - 0.08) * 10) / 10));
+  const yTicks = Array.from({ length: Math.round((1 - yFloor) / 0.1) + 1 }, (_, i) => +(yFloor + i * 0.1).toFixed(1));
   const drifter = (steps.data ?? []).find((s) => s.name === "Wireform diameter check");
   const worst = (steps.data ?? []).filter((r) => r.first_fail > 0).sort((a, b) => a.fpy - b.fpy).slice(0, 10)
     .map((r) => ({ ...r, loss: 1 - r.fpy, short: `${r.step_id}. ${r.name}` }));
@@ -61,7 +64,7 @@ export default function Overview() {
             <LineChart data={d?.trend ?? []} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
               <CartesianGrid stroke={c.grid} vertical={false} />
               <XAxis dataKey="period" tickFormatter={periodLabel} minTickGap={16} {...axisProps(c)} />
-              <YAxis domain={grain === "week" ? [0.3, 1] : [0.5, 1]} ticks={grain === "week" ? [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1] : [0.5, 0.6, 0.7, 0.8, 0.9, 1]} allowDataOverflow tickFormatter={(v) => pct(v, 0)} {...axisProps(c)} axisLine={false} width={44} />
+              <YAxis domain={[yFloor, 1]} ticks={yTicks} allowDataOverflow tickFormatter={(v) => pct(v, 0)} {...axisProps(c)} axisLine={false} width={44} />
               <Tooltip cursor={{ stroke: c.axis }} content={({ active, payload }) => active && payload?.length ? (
                 <Tip title={grain === "week" ? `Week of ${periodLabel(payload[0].payload.period)}` : payload[0].payload.period} rows={[
                   { name: "First-pass yield", value: pct(payload[0].payload.fpy), color: c.s1 },
