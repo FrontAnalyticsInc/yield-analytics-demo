@@ -9,7 +9,7 @@ type Insp = {
   bbox_x: number | null; bbox_y: number | null; bbox_w: number | null; bbox_h: number | null;
 };
 type Cell = { true_class: string; ai_class: string; n: number };
-const VISUAL = [[1, "Pericardium receiving"], [10, "Leaflet visual"], [25, "Suture line"], [30, "Coaptation"], [42, "Final visual"]] as const;
+const VISUAL = [[1, "Pericardium receiving"], [10, "Leaflet visual"], [25, "Suture line"], [30, "Coaptation"], [44, "Final visual"]] as const;
 const CLASSES = ["ok", "TISSUE_TEAR", "CALCIFIC_SPOT", "FIBER_PARTICLE", "SUTURE_GAP", "LEAFLET_MISALIGN"];
 const PAGE = 60;
 

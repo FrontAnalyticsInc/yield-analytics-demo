@@ -27,12 +27,12 @@ export default function Overview() {
   return (
     <>
       <h1>Manufacturing yield overview</h1>
-      <p className="sub">Surgical heart valve line · 50-step routing · first-pass and rolled throughput yield</p>
+      <p className="sub">Surgical heart valve line · 52-step routing · first-pass and rolled throughput yield</p>
       <div className="toolbar"><PeriodBar models={meta.data?.models} /></div>
 
       <div className="tiles">
         <div className="tile"><div className="k">First-pass yield</div><div className="v">{pct(d?.fpy)}</div><div className="d">units with no fail or rework</div></div>
-        <div className="tile"><div className="k">Rolled throughput yield</div><div className="v">{pct(d?.rty)}</div><div className="d">product of 50 step yields</div></div>
+        <div className="tile"><div className="k">Rolled throughput yield</div><div className="v">{pct(d?.rty)}</div><div className="d">product of 52 step yields</div></div>
         <div className="tile"><div className="k">Final yield</div><div className="v">{pct(d?.final_yield)}</div><div className="d">shipped ÷ completed</div></div>
         <div className="tile"><div className="k">Completed</div><div className="v">{num(d?.completed)}</div><div className="d">{num(d?.scrapped)} scrapped</div></div>
         <div className="tile"><div className="k">Work in process</div><div className="v">{num(d?.wip)}</div><div className="d">units on the line now</div></div>

@@ -3,7 +3,7 @@
 Cohort = units that finished (shipped or scrapped) in the window, so every unit has a
 complete path and the band only narrows where units actually leave.
 
-Defects are *caught* at gates (measurement and visual steps) but *caused* upstream.
+Defects are *caught* at checks (measurement, visual and go/no-go steps) but *caused* upstream.
 ORIGIN is engineering's attribution of (defect, catching step) -> causing step. It is an
 assumption table, not a measurement; the UI labels it as such.
 """
@@ -29,10 +29,12 @@ ORIGIN = {
     ("FIBER_PARTICLE", 25): 23,
     ("SUTURE_GAP", 30): 24,
     ("LEAFLET_MISALIGN", 30): 22,    # leaflet-to-frame alignment
-    ("TISSUE_TEAR", 42): 24,         # needle damage during leaflet body suturing
-    ("SUTURE_GAP", 42): 24,
-    ("LEAFLET_MISALIGN", 42): 22,
-    ("FIBER_PARTICLE", 42): 28,      # trimming sheds fabric fibers
+    ("TISSUE_TEAR", 44): 24,         # needle damage during leaflet body suturing
+    ("SUTURE_GAP", 44): 24,
+    ("LEAFLET_MISALIGN", 44): 22,
+    ("FIBER_PARTICLE", 44): 28,      # trimming sheds fabric fibers
+    ("COAPT_FAIL", 31): 22,          # go / no-go: geometry set at leaflet-to-frame alignment
+    ("LEAK_FAIL", 39): 24,           # go / no-go: a leak path is a suture line problem
 }
 
 

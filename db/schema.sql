@@ -13,7 +13,7 @@ CREATE TABLE mfg.step (
     step_id      INT          NOT NULL PRIMARY KEY,   -- routing sequence 1..50
     name         VARCHAR(80)  NOT NULL,
     area         VARCHAR(40)  NOT NULL,
-    step_type    VARCHAR(12)  NOT NULL,               -- process | measurement | visual
+    step_type    VARCHAR(12)  NOT NULL,               -- process | measurement | visual | gate
     param_name   VARCHAR(40)  NULL,
     param_unit   VARCHAR(12)  NULL,
     lsl          FLOAT        NULL,

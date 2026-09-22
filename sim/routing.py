@@ -1,4 +1,4 @@
-"""The 50-step routing for a bovine-pericardium surgical heart valve.
+"""The 52-step routing for a bovine-pericardium surgical heart valve.
 
 Each step is (name, area, type, spec). Measurement specs are
 (param, unit, lsl, target, usl, process_sd). Visual steps capture an image.
@@ -6,7 +6,7 @@ Base fail rates are per attempt; the simulator layers drift and lot/operator
 effects on top.
 """
 
-P, M, V = "process", "measurement", "visual"
+P, M, V, G = "process", "measurement", "visual", "gate"   # G = go / no-go, pass or fail, nothing measured
 
 STEPS = [
     # Tissue preparation
@@ -42,6 +42,7 @@ STEPS = [
     ("Trim excess fabric", "Assembly", P, None),
     ("Commissure height measurement", "Assembly", M, ("commissure_height", "mm", 13.6, 14.0, 14.4, 0.08)),
     ("Coaptation visual check", "Assembly", V, None),
+    ("Coaptation go / no-go", "Assembly", G, None),
     ("Valve ID marking", "Assembly", P, None),
     # Functional test
     ("Pre-test rinse", "Test", P, None),
@@ -50,6 +51,7 @@ STEPS = [
     ("Mean pressure gradient", "Test", M, ("gradient", "mmHg", 6.0, 9.0, 12.0, 0.7)),
     ("Regurgitant fraction", "Test", M, ("regurgitant_fraction", "%", 0.0, 4.0, 10.0, 1.4)),
     ("Leakage test", "Test", M, ("leakage", "mL/s", 0.0, 1.0, 2.5, 0.35)),
+    ("Pressure integrity test", "Test", G, None),
     ("Leaflet opening dynamics review", "Test", P, None),
     ("Post-test rinse", "Test", P, None),
     # Final
@@ -65,7 +67,16 @@ STEPS = [
     ("Device history record review", "Final", P, None),
     ("Final QA release", "Final", P, None),
 ]
-assert len(STEPS) == 50
+assert len(STEPS) == 52
+assert [STEPS[i - 1][0] for i in (31, 39)] == ["Coaptation go / no-go", "Pressure integrity test"]
+
+# Go / no-go gates: step_id -> (fail rate on first attempt, fail rate on the retest, defect).
+# The pressure test is the dominant loss: 40% fail, and most of those cannot be recovered,
+# which is what makes rework look ineffective (60% pass first time, ~75% after rework).
+GATES = {
+    31: (0.07, 0.25, "COAPT_FAIL"),
+    39: (0.38, 0.58, "LEAK_FAIL"),
+}
 
 DEFECTS = [
     # code, description, category
@@ -77,6 +88,8 @@ DEFECTS = [
     ("OOS_LOW", "Measurement below LSL", "dimensional"),
     ("OOS_HIGH", "Measurement above USL", "dimensional"),
     ("PROCESS_DEV", "Process deviation / documentation error", "process"),
+    ("COAPT_FAIL", "Coaptation gap at go / no-go check", "functional"),
+    ("LEAK_FAIL", "Leak beyond limit at pressure integrity test", "functional"),
 ]
 
 # Which image defects each visual step can see.
@@ -85,7 +98,7 @@ VISUAL_DEFECTS = {
     10: ["TISSUE_TEAR", "CALCIFIC_SPOT", "FIBER_PARTICLE"],
     25: ["SUTURE_GAP", "FIBER_PARTICLE"],
     30: ["LEAFLET_MISALIGN", "SUTURE_GAP"],
-    42: ["TISSUE_TEAR", "FIBER_PARTICLE", "SUTURE_GAP", "LEAFLET_MISALIGN"],
+    44: ["TISSUE_TEAR", "FIBER_PARTICLE", "SUTURE_GAP", "LEAFLET_MISALIGN"],
 }
 
 # Defects that cannot be reworked -> unit scrapped.
@@ -112,6 +125,6 @@ OPERATORS = [
 
 def equipment_for(step_id: int, step_type: str) -> list[tuple[str, str]]:
     """One or two stations per step (two where there's parallel capacity)."""
-    code = {"process": "PR", "measurement": "MS", "visual": "VI"}[step_type]
-    n = 2 if step_type != "process" or step_id in (23, 24, 26) else 1
+    code = {"process": "PR", "measurement": "MS", "visual": "VI", "gate": "GO"}[step_type]
+    n = 2 if step_type != "process" or step_id in (23, 24, 26) else 1   # two stations where there is parallel capacity
     return [(f"{code}-{step_id:02d}-{k}", f"{code} station {step_id:02d}{'AB'[k - 1]}") for k in range(1, n + 1)]

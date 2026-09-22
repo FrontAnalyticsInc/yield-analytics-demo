@@ -10,6 +10,8 @@ Built-in stories for the demo (all visible in the analytics):
   * Tissue lot PT-2606-B carries elevated calcific spots.
   * New hire OP-07 (swing shift, started March 2026) has a suture learning curve.
   * The vision model under-calls fiber/particulate, so AI vs inspector disagree.
+  * The pressure integrity test (step 39) fails 40% of valves and the retest recovers
+    well under half of them, so rework is expensive and mostly ineffective.
 """
 
 import argparse
@@ -24,7 +26,7 @@ from datetime import datetime, timedelta
 import pymssql
 
 import images
-from routing import DEFECTS, MODELS, OPERATORS, SCRAP_DEFECTS, STEPS, VISUAL_DEFECTS, equipment_for
+from routing import DEFECTS, GATES, MODELS, OPERATORS, SCRAP_DEFECTS, STEPS, VISUAL_DEFECTS, equipment_for
 
 log = logging.getLogger("sim")
 SEED = int(os.environ.get("SIM_SEED", "2026"))
@@ -79,7 +81,7 @@ def drift(eq_id: str, t: datetime) -> float:
         start, peak, fixed = datetime(2026, 5, 15), datetime(2026, 6, 25), datetime(2026, 7, 6)
         if start <= t < fixed:
             return 4.6 * min(1.0, (t - start) / (peak - start))
-    if eq_id == "MS-34-1":  # slow, harmless wander so charts aren't flat
+    if eq_id == "MS-35-1":  # slow, harmless wander so charts aren't flat
         return 0.4 * math.sin((t - EPOCH).days / 45)
     return 0.0
 
@@ -118,7 +120,7 @@ def plan_unit(i: int):
             t += timedelta(hours=rng.expovariate(1 / 3.5))            # queue
             if t.weekday() >= 5:                                        # no weekend shifts
                 t += timedelta(days=7 - t.weekday())
-            dur = timedelta(minutes=rng.uniform(10, 50) * (2 if kind == "measurement" and area == "Test" else 1))
+            dur = timedelta(minutes=rng.uniform(10, 50) * (2 if area == "Test" and kind in ("measurement", "gate") else 1))
             shift_ops = [o for o in OPERATORS if o[2] == ("day" if 6 <= t.hour < 15 else "swing")]
             op = rng.choice(shift_ops)[0]
             eq = rng.choice(stations)[0]
@@ -151,6 +153,16 @@ def plan_unit(i: int):
                 if defect:
                     ev["defect_code"] = defect
                     ev["result"] = "scrap" if defect in SCRAP_DEFECTS or attempt > 1 else "rework"
+            elif kind == "gate":
+                # go / no-go: pass or fail, nothing measured. A failed unit is reworked once;
+                # the retest fails far more often than the first test, so rework recovers little.
+                first, retest, defect = GATES[step_id]
+                rate = first if attempt == 1 else retest
+                if step_id == 31:
+                    rate *= operator_skill(op, t)
+                if rng.random() < rate:
+                    ev["defect_code"] = defect
+                    ev["result"] = "rework" if attempt == 1 else "scrap"
             else:
                 rate = 0.0015 * (operator_skill(op, t) if area == "Assembly" else 1)
                 if rng.random() < rate:

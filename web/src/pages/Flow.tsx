@@ -5,7 +5,7 @@ import { label, num, pct, qs, useApi, useColors } from "../lib";
 
 type Counts = Record<string, number>;
 type Step = {
-  step_id: number; name: string; area: string; step_type: "process" | "measurement" | "visual";
+  step_id: number; name: string; area: string; step_type: "process" | "measurement" | "visual" | "gate";
   param_unit: string | null; entered: number; fpy: number; first_fail: number;
   scrap: Counts; rework: Counts; caused_scrap: Counts; caused_rework: Counts;
   cpk: number | null; ai_agreement: number | null; images: number;
@@ -23,6 +23,9 @@ function useNarrow() {
 const MAG = 10;         // fallout ribbons drawn this many times their true width
 const ROW = 30, GATE = 36, OPEN = 176, AREA = 24;
 const MAG_RW = 3;       // rework loops are thinner so ten loops don't swamp four exits
+const MAX_RW = 13;      // ... and capped, so one heavy-rework gate stays a loop and not a blob
+const MAX_SC = 26;      // a gate that scraps a quarter of the line would otherwise draw a 130px slab
+const MAX_TH = 9;       // attribution threads run the length of the page, so they stay thin
 const sum = (c: Counts) => Object.values(c).reduce((a, b) => a + b, 0);
 const isGate = (s: Step) => s.step_type !== "process";
 /** caused-view keys are "DEFECT@catchStep" */
@@ -66,7 +69,7 @@ export default function Flow() {
     <>
       <h1>Process flow</h1>
       <p className="sub">
-        All 50 routing steps, top to bottom. The band is the units still in the process. Units that were scrapped leave to the right, and
+        All {steps.length || 52} routing steps, top to bottom. The band is the units still in the process. Units that were scrapped leave to the right, and
         rework loops back on the left. Most steps have no measurement, so a defect made there only shows up at a later check.
       </p>
       <div className="toolbar">
@@ -83,7 +86,7 @@ export default function Flow() {
         <div className="tile"><div className="k">Units finished</div><div className="v">{num(d?.units)}</div><div className="d">shipped or scrapped in the period</div></div>
         <div className="tile"><div className="k">Shipped</div><div className="v">{num(d?.shipped)}</div><div className="d">final yield {pct(d?.yield)}</div></div>
         <div className="tile"><div className="k">Rolled throughput yield</div><div className="v">{pct(d?.rty)}</div><div className="d">through every step first time</div></div>
-        <div className="tile"><div className="k">Checks</div><div className="v">{steps.filter(isGate).length} <span style={{ fontSize: 15, color: "var(--muted)" }}>of 50</span></div><div className="d">steps that measure or image the valve</div></div>
+        <div className="tile"><div className="k">Checks</div><div className="v">{steps.filter(isGate).length} <span style={{ fontSize: 15, color: "var(--muted)" }}>of {steps.length || 52}</span></div><div className="d">steps that measure, image or gate the valve</div></div>
       </div>
 
       <div className="card">
@@ -101,11 +104,11 @@ export default function Flow() {
         {r.error && <p className="hint">Could not load: {r.error}</p>}
 
         <div className="flow" style={{ height: H }}>
-          <svg className="flowsvg" width={W} height={H} aria-label="Units flowing through the 50-step routing">
+          <svg className="flowsvg" width={W} height={H} aria-label="Units flowing through the routing, top to bottom">
             {blind.map((b) => (
               <g key={b.from}>
                 <rect x={4} y={ys[b.from] + 2} width={W - 8} height={ys[b.to] + ROW - ys[b.from] - 4 + (steps[b.to].step_id === sel ? OPEN : 0)} rx={6} fill={c.grid} opacity={0.45} />
-                {b.to - b.from >= 2 && W > 200 && <text x={W - 10} y={ys[b.from] + 14} textAnchor="end" fontSize={10.5} fill={c.muted}>{b.to - b.from + 1} steps unchecked</text>}
+                {b.to - b.from >= 2 && W > 200 && <text x={8} y={ys[b.from] + 14} fontSize={10.5} fill={c.muted}>{b.to - b.from + 1} steps unchecked</text>}
               </g>
             ))}
             {/* the band: a trapezoid per step so it narrows exactly where units leave */}
@@ -124,7 +127,7 @@ export default function Flow() {
               const n = sum(view === "caused" ? s.caused_rework : s.rework);
               if (!n) return null;
               const x = CX - bw(s.entered) / 2 - 2, m = mid(i);
-              return <path key={s.step_id} fill="none" stroke="var(--warning)" strokeWidth={Math.max(1.5, bw(n) * MAG_RW)} strokeLinecap="round" opacity={0.9}
+              return <path key={s.step_id} fill="none" stroke="var(--warning)" strokeWidth={Math.min(MAX_RW, Math.max(1.5, bw(n) * MAG_RW))} strokeLinecap="round" opacity={0.9}
                 d={`M${x},${m + 6} C${x - 26},${m + 10} ${x - 26},${m - 12} ${x},${m - 8}`}><title>{`${n} reworked at step ${s.step_id}`}</title></path>;
             })}
             {/* scrap leaving on the right */}
@@ -134,7 +137,7 @@ export default function Flow() {
               const x = CX + bw(s.entered) / 2, m = mid(i);
               return (
                 <g key={s.step_id}>
-                  <path fill="none" stroke={c.critical} strokeWidth={Math.max(2, bw(n) * MAG)} opacity={0.85}
+                  <path fill="none" stroke={c.critical} strokeWidth={Math.min(MAX_SC, Math.max(2, bw(n) * MAG))} opacity={0.85}
                     d={`M${x - 2},${m} C${x + 40},${m} ${x + 40},${m + 16} ${W - 44},${m + 16}`}><title>{`${n} scrapped at step ${s.step_id}`}</title></path>
                   <text x={W - 40} y={m + 20} fontSize={12} fontWeight={650} fill={c.critical}>{n}</text>
                 </g>
@@ -143,11 +146,11 @@ export default function Flow() {
             {threads.map((t, k) => {
               const a = mid(idx(t.from)), b = mid(idx(t.at));
               const x = CX + 6 + (k % 4) * 6;
-              const w = Math.max(2, bw(t.n) * MAG);
+              const w = Math.min(MAX_TH, Math.max(2, bw(t.n) * MAG));
               return (
                 <g key={k}>
                   <circle cx={x} cy={a} r={4} fill={c.critical} />
-                  <path fill="none" stroke={c.critical} strokeWidth={w} strokeDasharray={t.from === t.at ? undefined : "5 4"} opacity={0.85}
+                  <path fill="none" stroke={c.critical} strokeWidth={w} strokeDasharray={t.from === t.at ? undefined : "6 5"} opacity={0.7}
                     d={`M${x},${a} L${x},${b} C${x + 40},${b} ${x + 40},${b + 16} ${W - 44},${b + 16}`}>
                     <title>{`${t.n} × ${label(t.defect)}: likely caused at step ${t.from}, caught at step ${t.at}`}</title>
                   </path>
@@ -179,7 +182,7 @@ function Row({ s, left, top, open, view, units, onClick }: { s: Step; left: numb
       <button className="flowhead" onClick={onClick} aria-expanded={open} style={{ height: gate ? GATE : ROW }}>
         <span className="no">{s.step_id}</span>
         <span className="nm">{s.name}</span>
-        <span className="ty">{s.step_type === "measurement" ? "measure" : s.step_type === "visual" ? "image" : ""}</span>
+        <span className="ty">{{ measurement: "measure", visual: "image", gate: "go / no-go", process: "" }[s.step_type]}</span>
         <span className="num">{num(s.entered)}</span>
         <span className={`num ${s.fpy < 0.97 ? "bad" : ""}`}>{gate || s.first_fail ? pct(s.fpy) : ""}</span>
         <span className="num rw">{rework ? `↻ ${rework}` : ""}</span>

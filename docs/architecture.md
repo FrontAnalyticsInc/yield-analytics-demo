@@ -38,7 +38,7 @@ flowchart LR
 
 | Component | What it does | Tech |
 |---|---|---|
-| `sim` | Builds a deterministic plan for every valve (50 steps, rework loops, scrap, measurements, images) and inserts events once their timestamps have passed. On first start this backfills a year of history; after that, new production appears every 15 minutes. | Python, Pillow |
+| `sim` | Builds a deterministic plan for every valve (52 steps, rework loops, scrap, measurements, images) and inserts events once their timestamps have passed. On first start this backfills a year of history; after that, new production appears every 15 minutes. | Python, Pillow |
 | `db` | System of record. Same engine and T-SQL as Azure SQL, so the schema moves to Azure unchanged. | SQL Server 2022 Developer (container) |
 | `api` | JSON API for the deep-dive app, image server, Parquet feed for Power BI, and the React build. | FastAPI, React + Vite + Recharts |
 | `exporter` | Writes a star schema (5 dims, 3 facts) to Parquet every hour. It can also upload to Azure Blob. | pyarrow, azure-storage-blob |
