@@ -229,3 +229,39 @@ ul.checks li.warn::before { content: "!"; color: #b07500; left: 4px; }
   .g2, .g3 { grid-template-columns: 1fr; }
   .modal { grid-template-columns: 1fr; }
 }
+
+/* process flow */
+.flow { position: relative; min-width: 0; }
+.flowsvg { position: absolute; left: 0; top: 0; overflow: visible; }
+.flowrow { position: absolute; right: 0; border-bottom: 1px solid var(--grid); }
+.flowrow.open { background: var(--surface-2); border-radius: 6px; }
+.flowhead { all: unset; box-sizing: border-box; cursor: pointer; width: 100%; display: grid; align-items: center; gap: 8px; padding: 0 8px;
+  grid-template-columns: 24px minmax(0, 1fr) 56px 52px 54px 50px 44px 150px; font-size: 13px; color: var(--ink-2); }
+.flowhead:hover { background: var(--surface-2); }
+.flowhead:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.flowrow.gate .flowhead { color: var(--ink); font-weight: 550; }
+.flowhead .no { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+.flowhead .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.flowhead .ty { font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: .04em; }
+.flowhead .num { text-align: right; font-variant-numeric: tabular-nums; }
+.flowhead .num.bad { color: #b07500; font-weight: 600; }
+.flowhead .rw { color: #b07500; }
+.flowhead .sc { color: var(--critical); font-weight: 650; }
+.flowhead .gm { display: flex; gap: 4px; justify-content: flex-end; }
+.flowarea { position: absolute; right: 0; box-sizing: border-box; border-bottom: 2px solid var(--axis); font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 6px 8px 0; pointer-events: none; }
+.flowdetail { display: grid; grid-template-columns: 1fr 1.3fr 1fr; gap: 16px; padding: 10px 12px; height: 176px; box-sizing: border-box; overflow: auto; font-size: 13px; }
+.flowdetail h3 { font-size: 12px; font-weight: 600; color: var(--ink-2); margin: 0 0 6px; }
+.flowdetail .fd { display: flex; gap: 8px; align-items: center; margin-bottom: 5px; }
+.flowdetail .fdlinks { display: flex; flex-direction: column; gap: 6px; }
+@media (max-width: 1100px) {
+  .flowhead { grid-template-columns: 22px minmax(0, 1fr) 50px 52px 46px 40px; }
+  .flowhead .ty, .flowhead .gm { display: none; }
+  .flowdetail { grid-template-columns: 1fr 1fr; }
+  .flowdetail .fdlinks { grid-column: 1 / -1; }
+}
+@media (max-width: 700px) {
+  .flowhead { grid-template-columns: 18px minmax(0, 1fr) 40px; gap: 6px; padding: 0 4px; font-size: 12px; }
+  .flowhead .num:not(.sc) { display: none; }
+  .flowdetail { grid-template-columns: 1fr; height: 176px; }
+}

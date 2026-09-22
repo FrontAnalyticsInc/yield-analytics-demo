@@ -52,7 +52,7 @@ function UnitDetail({ serial }: { serial: string }) {
             <tbody>
               {u.events.map((e) => (
                 <tr key={e.event_id}>
-                  <td>{e.step_id}{e.attempt > 1 ? `·${e.attempt}` : ""}</td>
+                  <td><Link to={`/flow?step=${e.step_id}`} title="Show this step in the process flow">{e.step_id}</Link>{e.attempt > 1 ? `·${e.attempt}` : ""}</td>
                   <td>{e.step_type === "measurement" ? <Link to={`/spc?step=${e.step_id}`}>{e.step_name}</Link> : e.step_name}</td>
                   <td>{e.area}</td>
                   <td><Result r={e.result} /></td>

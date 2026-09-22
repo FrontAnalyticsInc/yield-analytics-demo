@@ -57,7 +57,7 @@ export default function Inspections() {
   return (
     <>
       <h1>Image inspections</h1>
-      <p className="sub">Five visual steps capture an image of every valve. Inspectors disposition each one; a vision model scores it in parallel.</p>
+      <p className="sub">Five visual steps capture an image of every valve. Inspectors disposition each one; a vision model scores it in parallel.{step && <> <Link to={`/flow?step=${step}&view=caused`}>See what this check catches in the process flow →</Link></>}</p>
       <div className="toolbar">
         <label>Visual step
           <select value={step} onChange={(e) => set("step", e.target.value)}>
