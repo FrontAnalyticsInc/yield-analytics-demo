@@ -1,9 +1,10 @@
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { PeriodBar, useFilters } from "../main";
 import { axisProps, label, num, pct, qs, Tip, useApi, useColors } from "../lib";
 
-type Trend = { month: string; completed: number; shipped: number; scrapped: number; fpy: number; final_yield: number };
+type Trend = { period: string; completed: number; shipped: number; scrapped: number; fpy: number; final_yield: number };
 type Summary = { completed: number; shipped: number; scrapped: number; wip: number; fpy: number; rty: number; final_yield: number; cycle_days: number; trend: Trend[] };
 type Step = { step_id: number; name: string; area: string; step_type: string; attempts: number; first_fail: number; rework: number; scrap: number; fpy: number };
 type Pareto = { defect_code: string; description: string; category: string; n: number; scrap: number };
@@ -12,9 +13,11 @@ export default function Overview() {
   const f = useFilters();
   const c = useColors();
   const nav = useNavigate();
+  const [grain, setGrain] = useState<"month" | "week">("month");
   const p = qs({ start: f.start, model: f.model });
+  const periodLabel = (v: string) => (grain === "week" ? new Date(`${v}T00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : v);
   const meta = useApi<{ models: string[] }>("/api/meta");
-  const s = useApi<Summary>(`/api/summary${p}`);
+  const s = useApi<Summary>(`/api/summary${qs({ start: f.start, model: f.model, grain })}`);
   const steps = useApi<Step[]>(`/api/steps${p}`);
   const pareto = useApi<Pareto[]>(`/api/pareto${qs({ start: f.start })}`);
   const worst = (steps.data ?? []).filter((r) => r.first_fail > 0).sort((a, b) => a.fpy - b.fpy).slice(0, 10)
@@ -38,8 +41,17 @@ export default function Overview() {
 
       <div className="grid g2">
         <div className="card">
-          <h2>Yield by month</h2>
-          <p className="hint">By month of completion</p>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+            <div>
+              <h2>Yield by {grain}</h2>
+              <p className="hint">By {grain} of completion{grain === "week" ? ", Monday start" : ""}</p>
+            </div>
+            <span className="seg" style={{ flexShrink: 0 }}>
+              {(["week", "month"] as const).map((g) => (
+                <button key={g} className={grain === g ? "on" : ""} onClick={() => setGrain(g)}>{g === "week" ? "Week" : "Month"}</button>
+              ))}
+            </span>
+          </div>
           <div className="legend">
             <span><i className="sw" style={{ background: c.s1 }} />First-pass yield</span>
             <span><i className="sw" style={{ background: c.s2 }} />Final yield</span>
@@ -47,16 +59,16 @@ export default function Overview() {
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={d?.trend ?? []} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
               <CartesianGrid stroke={c.grid} vertical={false} />
-              <XAxis dataKey="month" {...axisProps(c)} />
-              <YAxis domain={[0.5, 1]} ticks={[0.5, 0.6, 0.7, 0.8, 0.9, 1]} tickFormatter={(v) => pct(v, 0)} {...axisProps(c)} axisLine={false} width={44} />
+              <XAxis dataKey="period" tickFormatter={periodLabel} minTickGap={16} {...axisProps(c)} />
+              <YAxis domain={grain === "week" ? [0.3, 1] : [0.5, 1]} ticks={grain === "week" ? [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1] : [0.5, 0.6, 0.7, 0.8, 0.9, 1]} allowDataOverflow tickFormatter={(v) => pct(v, 0)} {...axisProps(c)} axisLine={false} width={44} />
               <Tooltip cursor={{ stroke: c.axis }} content={({ active, payload }) => active && payload?.length ? (
-                <Tip title={payload[0].payload.month} rows={[
+                <Tip title={grain === "week" ? `Week of ${periodLabel(payload[0].payload.period)}` : payload[0].payload.period} rows={[
                   { name: "First-pass yield", value: pct(payload[0].payload.fpy), color: c.s1 },
                   { name: "Final yield", value: pct(payload[0].payload.final_yield), color: c.s2 },
                   { name: "Completed", value: num(payload[0].payload.completed) },
                 ]} />) : null} />
-              <Line dataKey="fpy" stroke={c.s1} strokeWidth={2} dot={{ r: 3, strokeWidth: 0, fill: c.s1 }} activeDot={{ r: 5, stroke: c.surface, strokeWidth: 2 }} isAnimationActive={false} />
-              <Line dataKey="final_yield" stroke={c.s2} strokeWidth={2} dot={{ r: 3, strokeWidth: 0, fill: c.s2 }} activeDot={{ r: 5, stroke: c.surface, strokeWidth: 2 }} isAnimationActive={false} />
+              <Line dataKey="fpy" stroke={c.s1} strokeWidth={2} dot={grain === "month" ? { r: 3, strokeWidth: 0, fill: c.s1 } : false} activeDot={{ r: 5, stroke: c.surface, strokeWidth: 2 }} isAnimationActive={false} />
+              <Line dataKey="final_yield" stroke={c.s2} strokeWidth={2} dot={grain === "month" ? { r: 3, strokeWidth: 0, fill: c.s2 } : false} activeDot={{ r: 5, stroke: c.surface, strokeWidth: 2 }} isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>

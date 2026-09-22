@@ -58,8 +58,13 @@ def meta():
 # --- yield -----------------------------------------------------------------------
 
 @app.get("/api/summary")
-def summary(start: date | None = None, end: date | None = None, model: str | None = None):
+def summary(start: date | None = None, end: date | None = None, model: str | None = None,
+            grain: str = Query("month", enum=["month", "week"])):
     s, e = window(start, end)
+    # period key: 'yyyy-MM' for months, the Monday (yyyy-MM-dd) for ISO-style weeks
+    period = ("FORMAT(completed_at,'yyyy-MM')" if grain == "month" else
+              "FORMAT(DATEADD(day, -((DATEPART(weekday, completed_at) + @@DATEFIRST - 2) % 7), "
+              "CAST(completed_at AS DATE)),'yyyy-MM-dd')")
     m = model or "%"
     kpi = q("""
         SELECT COUNT(*) completed,
@@ -71,13 +76,15 @@ def summary(start: date | None = None, end: date | None = None, model: str | Non
     wip = q("SELECT COUNT(*) n FROM mfg.unit WHERE status='wip' AND model LIKE %s", (m,))[0]["n"]
     steps = step_yield(start, end, model)
     rty = math.prod(r["fpy"] for r in steps if r["attempts"])
-    trend = q("""
-        SELECT FORMAT(completed_at,'yyyy-MM') month, COUNT(*) completed,
+    trend = q(f"""
+        SELECT {period} period, COUNT(*) completed,
                SUM(CASE WHEN status='shipped' THEN 1 ELSE 0 END) shipped,
                SUM(CASE WHEN status='scrapped' THEN 1 ELSE 0 END) scrapped,
                SUM(CAST(first_pass AS INT)) first_pass
         FROM mfg.unit WHERE status<>'wip' AND completed_at>=%s AND completed_at<%s AND model LIKE %s
-        GROUP BY FORMAT(completed_at,'yyyy-MM') ORDER BY month""", (s, e, m))
+        GROUP BY {period} ORDER BY period""", (s, e, m))
+    if grain == "week":  # drop edge weeks with a handful of units; one scrap would read as 0% yield
+        trend = [t for t in trend if t["completed"] >= 5]
     for t in trend:
         t["fpy"] = t["first_pass"] / t["completed"]
         t["final_yield"] = t["shipped"] / t["completed"]
