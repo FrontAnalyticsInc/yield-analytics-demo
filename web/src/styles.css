@@ -275,3 +275,7 @@ ul.checks li.warn::before { content: "!"; color: #b07500; left: 4px; }
 .img .count { position: absolute; right: 6px; bottom: 6px; background: rgba(0, 0, 0, .66); color: #fff;
   font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 999px; }
 .info dd.over { color: var(--critical); font-weight: 600; }
+
+/* a required field the form is complaining about */
+input.bad, select.bad, textarea.bad { border-color: var(--critical); box-shadow: 0 0 0 2px rgba(208, 59, 59, .16); }
+input.bad:focus, select.bad:focus { outline-color: var(--critical); }

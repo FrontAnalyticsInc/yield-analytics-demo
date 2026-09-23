@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DesignDiagram from "../DesignDiagram";
 import {
-  buildRuns, centerRule, cornerRunsNeeded, detectionChance, Factor, recommendedReplicates, settingLabel, validateFactors,
+  buildRuns, centerRule, cornerRunsNeeded, detectionChance, Factor, FactorField, factorIssues, recommendedReplicates,
+  settingLabel,
 } from "../doe";
 import { num, pct, useApi } from "../lib";
 
@@ -22,10 +23,10 @@ const EXAMPLE: Factor[] = [
   { name: "Fixation time", kind: "numeric", units: "h", low: 20, high: 28, lowLabel: "A", highLabel: "B" },
 ];
 
-function NumberInput({ value, onChange, step = "any", width = 90 }: { value: number; onChange: (v: number) => void; step?: string; width?: number }) {
+function NumberInput({ value, onChange, step = "any", width = 90, bad = false }: { value: number; onChange: (v: number) => void; step?: string; width?: number; bad?: boolean }) {
   const [text, setText] = useState(String(value));
   useEffect(() => { if (parseFloat(text) !== value) setText(String(value)); }, [value]); // eslint-disable-line
-  return <input type="number" step={step} value={text} style={{ width, minWidth: 0 }}
+  return <input type="number" step={step} value={text} className={bad ? "bad" : undefined} aria-invalid={bad || undefined} style={{ width, minWidth: 0 }}
     onChange={(e) => { setText(e.target.value); const v = parseFloat(e.target.value); if (!Number.isNaN(v)) onChange(v); }} />;
 }
 
@@ -78,7 +79,10 @@ export default function DoeDesign() {
   // 2. factors
   const [factors, setFactors] = useState<Factor[]>(EXAMPLE);
   const setF = (i: number, patch: Partial<Factor>) => setFactors((fs) => fs.map((f, j) => (j === i ? { ...f, ...patch } : f)));
-  const errs = validateFactors(factors);
+  const issues = factorIssues(factors);
+  const errs = issues.map((e) => e.message);
+  /** does a message currently point at this field? then it gets the red border */
+  const bad = (i: number, f: FactorField) => issues.some((e) => e.factor === i && e.fields.includes(f));
   const k = factors.length;
 
   // 3. plan
@@ -106,6 +110,8 @@ export default function DoeDesign() {
   const [operator, setOperator] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const miss = (key: string, empty: boolean) => (touched[key] && empty ? "bad" : undefined);
   const canSave = !errs.length && sigma > 0 && effectSize > 0 && name.trim() && operator && !saving;
 
   async function save() {
@@ -163,7 +169,8 @@ export default function DoeDesign() {
               <div className="factor" key={i}>
                 <div className="factor-head">
                   <span className="fno">{String.fromCharCode(65 + i)}</span>
-                  <input type="text" placeholder="Factor name" value={f.name} onChange={(e) => setF(i, { name: e.target.value })} style={{ flex: 1 }} />
+                  <input type="text" placeholder="Factor name" value={f.name} onChange={(e) => setF(i, { name: e.target.value })}
+                    className={bad(i, "name") ? "bad" : undefined} aria-invalid={bad(i, "name") || undefined} style={{ flex: 1 }} />
                   <span className="seg">
                     <button className={f.kind === "numeric" ? "on" : ""} onClick={() => setF(i, { kind: "numeric" })}>Numeric</button>
                     <button className={f.kind === "categorical" ? "on" : ""} onClick={() => setF(i, { kind: "categorical" })}>Categorical</button>
@@ -172,15 +179,17 @@ export default function DoeDesign() {
                 </div>
                 {f.kind === "numeric" ? (
                   <div className="factor-levels">
-                    <label>Low<NumberInput value={f.low} onChange={(v) => setF(i, { low: v })} /></label>
-                    <label>High<NumberInput value={f.high} onChange={(v) => setF(i, { high: v })} /></label>
+                    <label>Low<NumberInput value={f.low} onChange={(v) => setF(i, { low: v })} bad={bad(i, "low")} /></label>
+                    <label>High<NumberInput value={f.high} onChange={(v) => setF(i, { high: v })} bad={bad(i, "high")} /></label>
                     <label>Units<input type="text" value={f.units} onChange={(e) => setF(i, { units: e.target.value })} style={{ width: 70, minWidth: 0 }} /></label>
                     <span className="hint">Middle {settingLabel(f, 0)}</span>
                   </div>
                 ) : (
                   <div className="factor-levels">
-                    <label>Value 1<input type="text" value={f.lowLabel} onChange={(e) => setF(i, { lowLabel: e.target.value })} style={{ width: 130, minWidth: 0 }} /></label>
-                    <label>Value 2<input type="text" value={f.highLabel} onChange={(e) => setF(i, { highLabel: e.target.value })} style={{ width: 130, minWidth: 0 }} /></label>
+                    <label>Value 1<input type="text" value={f.lowLabel} onChange={(e) => setF(i, { lowLabel: e.target.value })}
+                      className={bad(i, "lowLabel") ? "bad" : undefined} aria-invalid={bad(i, "lowLabel") || undefined} style={{ width: 130, minWidth: 0 }} /></label>
+                    <label>Value 2<input type="text" value={f.highLabel} onChange={(e) => setF(i, { highLabel: e.target.value })}
+                      className={bad(i, "highLabel") ? "bad" : undefined} aria-invalid={bad(i, "highLabel") || undefined} style={{ width: 130, minWidth: 0 }} /></label>
                   </div>
                 )}
                 <div className="factor-levels">
@@ -264,10 +273,13 @@ export default function DoeDesign() {
 
           <section className="card">
             <h2><span className="stepno">4</span>Save the experiment</h2>
-            <label className="field">Name<input type="text" value={name} placeholder="e.g. Commissure height vs tension and fixation" onChange={(e) => setName(e.target.value)} /></label>
+            <label className="field">Name<input type="text" value={name} placeholder="e.g. Commissure height vs tension and fixation"
+              className={miss("name", !name.trim())} aria-invalid={(touched.name && !name.trim()) || undefined}
+              onBlur={() => setTouched((t) => ({ ...t, name: true }))} onChange={(e) => setName(e.target.value)} /></label>
             <label className="field">Objective<input type="text" value={objective} placeholder="What question should this answer?" onChange={(e) => setObjective(e.target.value)} /></label>
             <label className="field">Operator
-              <select value={operator} onChange={(e) => setOperator(e.target.value)}>
+              <select value={operator} className={miss("operator", !operator)} aria-invalid={(touched.operator && !operator) || undefined}
+                onBlur={() => setTouched((t) => ({ ...t, operator: true }))} onChange={(e) => setOperator(e.target.value)}>
                 <option value="">Select…</option>
                 {(meta.data?.operators ?? []).map((o) => <option key={o.operator_id} value={o.operator_id}>{o.name} ({o.operator_id})</option>)}
               </select>

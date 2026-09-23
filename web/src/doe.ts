@@ -148,17 +148,26 @@ export function settingLabel(f: Factor, coded: number): string {
   return `${+v.toFixed(4)}${f.units ? ` ${f.units}` : ""}`;
 }
 
-export function validateFactors(factors: Factor[]): string[] {
-  const errs: string[] = [];
+export type FactorField = "name" | "low" | "high" | "lowLabel" | "highLabel";
+export type FactorIssue = { factor: number; fields: FactorField[]; message: string };
+
+/** Validation with the offending field attached, so the form can mark the input itself. */
+export function factorIssues(factors: Factor[]): FactorIssue[] {
+  const out: FactorIssue[] = [];
   const names = new Set<string>();
   factors.forEach((f, i) => {
     const n = f.name.trim() || `Factor ${i + 1}`;
-    if (!f.name.trim()) errs.push(`Factor ${i + 1} needs a name.`);
-    if (names.has(n.toLowerCase())) errs.push(`Two factors are named "${n}".`);
+    if (!f.name.trim()) out.push({ factor: i, fields: ["name"], message: `Factor ${i + 1} needs a name.` });
+    if (names.has(n.toLowerCase())) out.push({ factor: i, fields: ["name"], message: `Two factors are named "${n}".` });
     names.add(n.toLowerCase());
-    if (f.kind === "numeric" && !(f.high > f.low)) errs.push(`${n}: high setting must be greater than low.`);
+    if (f.kind === "numeric" && !(f.high > f.low))
+      out.push({ factor: i, fields: ["low", "high"], message: `${n}: high setting must be greater than low.` });
     if (f.kind === "categorical" && (!f.lowLabel.trim() || !f.highLabel.trim() || f.lowLabel.trim() === f.highLabel.trim()))
-      errs.push(`${n}: enter two different values.`);
+      out.push({ factor: i, fields: ["lowLabel", "highLabel"], message: `${n}: enter two different values.` });
   });
-  return errs;
+  return out;
+}
+
+export function validateFactors(factors: Factor[]): string[] {
+  return factorIssues(factors).map((e) => e.message);
 }
