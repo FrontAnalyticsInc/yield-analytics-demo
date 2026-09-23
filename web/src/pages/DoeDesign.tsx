@@ -57,9 +57,16 @@ export default function DoeDesign() {
   const meta = useApi<{ steps: Step[]; operators: Operator[] }>("/api/meta");
   const mSteps = (meta.data?.steps ?? []).filter((s) => s.step_type === "measurement");
 
-  // 1. response
-  const [stepId, setStepId] = useState(29);
-  const noise = useApi<Noise>(`/api/doe/noise/${stepId}`);
+  // 1. response — resolved by name once the step list loads, because step ids move
+  // when the route changes and a stale id lands on a step that has no measurements
+  const [stepId, setStepId] = useState<number | null>(null);
+  useEffect(() => {
+    if (!mSteps.length) return;
+    if (stepId && mSteps.some((s) => s.step_id === stepId)) return;
+    const pick = mSteps.find((s) => s.name === "Commissure height measurement") ?? mSteps[0];
+    setStepId(pick.step_id);
+  }, [meta.data, stepId]);  // eslint-disable-line
+  const noise = useApi<Noise>(stepId ? `/api/doe/noise/${stepId}` : null);
   const step = mSteps.find((s) => s.step_id === stepId);
   const [sigmaOverride, setSigmaOverride] = useState<number | null>(null);
   const sigma = sigmaOverride ?? noise.data?.sd ?? 0;
@@ -131,7 +138,7 @@ export default function DoeDesign() {
           <section className="card">
             <h2><span className="stepno">1</span>What are you measuring?</h2>
             <label className="field">Response (measurement step)
-              <select value={stepId} onChange={(e) => setStepId(+e.target.value)}>
+              <select value={stepId ?? ""} onChange={(e) => setStepId(+e.target.value)}>
                 {mSteps.map((s) => <option key={s.step_id} value={s.step_id}>{s.step_id}. {s.name} ({s.param_unit})</option>)}
               </select>
             </label>
